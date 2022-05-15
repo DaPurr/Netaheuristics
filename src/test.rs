@@ -17,7 +17,7 @@ fn vns_single_operator() {
 }
 
 #[test]
-fn vns_single_operators2() {
+fn vns_single_operator2() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
     let operator: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 3));
@@ -33,11 +33,28 @@ fn vns_single_operators2() {
 }
 
 #[test]
-fn vns_multiple_operators() {
+fn vns_multiple_operators1() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
     let operator1: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
     let operator2: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 3));
+    let vns = VariableNeighborhoodSearch::new([operator1, operator2]);
+
+    let initial_solution = Number {
+        index: 0,
+        value: numbers[0],
+    };
+    let vns_solution = vns.optimize(initial_solution);
+
+    assert_eq!(vns_solution.index, 2)
+}
+
+#[test]
+fn vns_multiple_operators2() {
+    let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
+
+    let operator1: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
+    let operator2: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 4));
     let vns = VariableNeighborhoodSearch::new([operator1, operator2]);
 
     let initial_solution = Number {
@@ -110,8 +127,10 @@ impl Iterator for NeighborsUpUntilN {
 
                 let lb = 0 as isize;
                 let ub = self.numbers.len() as isize - 1;
+                let n = self.n as isize;
+                let iter = self.iter as isize;
 
-                let index = index_cursor as isize - self.n as isize + 2 * self.iter;
+                let index = index_cursor as isize - n * (1 - 2 * iter);
                 if index < lb {
                     self.iter += 1;
                     return self.next();
