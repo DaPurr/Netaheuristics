@@ -1,9 +1,9 @@
-use heuristics::{Evaluate, LocalSearchHeuristic, Operator, VariableNeighborhoodSearch};
+use heuristics::{vns::VariableNeighborhoodSearch, Evaluate, LocalSearchHeuristic, Operator};
 use rand::{Rng, RngCore, SeedableRng};
 
 fn main() {
     // init
-    let n = 30;
+    let n = 10;
     let width = 100.;
     let height = 100.;
     let seed = 0;
