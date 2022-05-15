@@ -2,51 +2,51 @@ pub trait Evaluate {
     fn evaluate(&self) -> f32;
 }
 
-pub trait Neighborhood<Solution> {
-    fn construct(&self, solution: &Solution) -> Box<dyn Iterator<Item = Solution>>;
+pub trait Operator<'a, Solution> {
+    fn construct_neighborhood(&self, solution: Solution)
+        -> Box<dyn Iterator<Item = Solution> + 'a>;
 }
 
 pub trait LocalSearchHeuristic<Solution> {
-    fn optimize(&self, solution: Solution) -> Option<Solution>;
+    fn optimize(&self, solution: Solution) -> Solution;
 }
 
-pub struct VariableNeighborhoodSearch<Solution> {
-    neighborhoods: Vec<Box<dyn Neighborhood<Solution>>>,
+pub struct VariableNeighborhoodSearch<'a, Solution> {
+    operators: Vec<Box<dyn Operator<'a, Solution> + 'a>>,
 }
 
-impl<Solution> VariableNeighborhoodSearch<Solution> {
-    pub fn new<T: IntoIterator<Item = Box<dyn Neighborhood<Solution>>>>(neighborhoods: T) -> Self {
+impl<'a, Solution> VariableNeighborhoodSearch<'a, Solution> {
+    pub fn new<T: IntoIterator<Item = Box<dyn Operator<'a, Solution> + 'a>>>(
+        neighborhoods: T,
+    ) -> Self {
         Self {
-            neighborhoods: neighborhoods.into_iter().collect(),
+            operators: neighborhoods.into_iter().collect(),
         }
     }
 }
 
-impl<Solution> LocalSearchHeuristic<Solution> for VariableNeighborhoodSearch<Solution>
+impl<'a, Solution> LocalSearchHeuristic<Solution> for VariableNeighborhoodSearch<'a, Solution>
 where
-    Solution: Evaluate,
+    Solution: Evaluate + Clone,
 {
-    fn optimize(&self, solution: Solution) -> Option<Solution> {
+    fn optimize(&self, initial_solution: Solution) -> Solution {
         // init
-        let mut best_solution = None;
+        let mut best_solution = initial_solution.clone();
         let mut index_neighborhood = 0;
-
         loop {
-            let ref neighborhood = self.neighborhoods[index_neighborhood];
+            let ref operator = self.operators[index_neighborhood];
 
             // explore entire neighborhood
             let mut is_improved_inside_neighborhood = false;
-            for neighbor in neighborhood.construct(&solution).into_iter() {
+            for neighbor in operator
+                .construct_neighborhood(best_solution.clone())
+                .into_iter()
+            {
                 let fitness = neighbor.evaluate();
 
-                match &best_solution {
-                    None => best_solution = Some(neighbor),
-                    Some(x) => {
-                        if fitness > x.evaluate() {
-                            is_improved_inside_neighborhood = true;
-                            best_solution = Some(neighbor);
-                        }
-                    }
+                if fitness > best_solution.evaluate() {
+                    is_improved_inside_neighborhood = true;
+                    best_solution = neighbor;
                 }
             }
 
@@ -59,9 +59,7 @@ where
 
                 // check termination criteria
                 // did we reach the end without improvement?
-                if index_neighborhood >= self.neighborhoods.len()
-                    && !is_improved_inside_neighborhood
-                {
+                if index_neighborhood >= self.operators.len() && !is_improved_inside_neighborhood {
                     break;
                 }
             }
