@@ -1,4 +1,7 @@
-use heuristics::{vns::VariableNeighborhoodSearch, Evaluate, LocalSearchHeuristic, Operator};
+use heuristics::{
+    vns::{BasicVNSCallbacks, VariableNeighborhoodSearch},
+    Evaluate, LocalSearchHeuristic, Operator,
+};
 use rand::{Rng, RngCore, SeedableRng};
 
 fn main() {
@@ -20,10 +23,11 @@ fn main() {
     // optimize with VNS
     let operator_2opt: Box<dyn Operator<Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
     let operator_3opt: Box<dyn Operator<Tour>> = Box::new(ThreeOpt::new(cities.as_slice()));
-    let vns = VariableNeighborhoodSearch::new([
-        // operator_2opt,
-        operator_3opt,
-    ]);
+    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
+        VariableNeighborhoodSearch::with_operators([
+            // operator_2opt,
+            operator_3opt,
+        ]);
     let vns_tour = vns.optimize(random_tour.clone());
 
     let length_random_tour = random_tour.evaluate();

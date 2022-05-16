@@ -15,6 +15,6 @@ pub trait LocalSearchHeuristic<Solution> {
     fn optimize(&self, solution: Solution) -> Solution;
 }
 
-pub trait TerminationCriteria {
-    fn terminate(&self) -> bool;
+pub trait TerminationCriteria<State> {
+    fn terminate(&self, state: &State) -> bool;
 }

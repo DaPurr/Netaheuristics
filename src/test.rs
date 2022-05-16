@@ -1,11 +1,15 @@
-use crate::{vns::VariableNeighborhoodSearch, Evaluate, LocalSearchHeuristic, Operator};
+use crate::{
+    vns::{BasicVNSCallbacks, VariableNeighborhoodSearch},
+    Evaluate, LocalSearchHeuristic, Operator,
+};
 
 #[test]
 fn vns_single_operator() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
     let operator: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
-    let vns = VariableNeighborhoodSearch::new([operator]);
+    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
+        VariableNeighborhoodSearch::with_operators([operator]);
 
     let initial_solution = Number {
         index: 0,
@@ -21,7 +25,8 @@ fn vns_single_operator2() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
     let operator: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 3));
-    let vns = VariableNeighborhoodSearch::new([operator]);
+    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
+        VariableNeighborhoodSearch::with_operators([operator]);
 
     let initial_solution = Number {
         index: 0,
@@ -38,7 +43,8 @@ fn vns_multiple_operators1() {
 
     let operator1: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
     let operator2: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 3));
-    let vns = VariableNeighborhoodSearch::new([operator1, operator2]);
+    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
+        VariableNeighborhoodSearch::with_operators([operator1, operator2]);
 
     let initial_solution = Number {
         index: 0,
@@ -55,7 +61,8 @@ fn vns_multiple_operators2() {
 
     let operator1: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
     let operator2: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 4));
-    let vns = VariableNeighborhoodSearch::new([operator1, operator2]);
+    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
+        VariableNeighborhoodSearch::with_operators([operator1, operator2]);
 
     let initial_solution = Number {
         index: 0,
