@@ -6,13 +6,18 @@ pub trait Evaluate {
     fn evaluate(&self) -> f32;
 }
 
-pub trait Operator<'a, Solution> {
-    fn construct_neighborhood(&self, solution: Solution)
-        -> Box<dyn Iterator<Item = Solution> + 'a>;
+pub trait Operator<Solution> {
+    fn construct_neighborhood(&self, solution: Solution) -> Box<dyn Iterator<Item = Solution>>;
+
+    #[allow(unused_variables)]
+    fn shake(&self, solution: Solution, rng: &mut dyn rand::RngCore) -> Solution {
+        solution
+    }
 }
 
-pub trait LocalSearchHeuristic<Solution> {
-    fn optimize(self, solution: Solution) -> Solution;
+pub trait LocalSearchHeuristic {
+    type Solution: Evaluate + Clone;
+    fn optimize(self, solution: Self::Solution) -> Self::Solution;
 }
 
 pub trait TerminationCriteria<State> {

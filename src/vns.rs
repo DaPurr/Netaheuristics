@@ -1,160 +1,170 @@
 use crate::{Evaluate, LocalSearchHeuristic, Operator};
 
-pub struct VariableNeighborhoodSearch<'a, Solution, Callbacks> {
-    operators: Vec<Box<dyn Operator<'a, Solution> + 'a>>,
-    callbacks: Callbacks,
+pub struct VariableNeighborhoodSearch<
+    Solution,
+    Selector: OperatorSelector,
+    Terminator: TerminationCriteria,
+> {
+    operators: Vec<Box<dyn Operator<Solution>>>,
+    selector: Selector,
+    terminator: Terminator,
+    rng: Box<dyn rand::RngCore>,
 }
 
-pub trait VNSCallbacks<Solution>
-where
-    Solution: Evaluate,
-{
-    fn select_operator(&mut self) -> usize;
-    fn propose_candidate(&mut self, candidate: &Solution) -> bool;
-    fn should_terminate(&mut self) -> bool;
+pub struct SequentialSelector {
+    operator_index: usize,
 }
 
-pub struct BasicVNSCallbacks {
-    objective_best: Option<f32>,
-    iterations_no_improvement: usize,
+pub trait OperatorSelector {
+    fn initial_operator(&self) -> usize;
+    fn select_operator(&mut self, did_improve: bool) -> usize;
+}
+
+pub trait TerminationCriteria {
+    fn terminate(&self) -> bool;
+}
+
+pub struct VNSBuilder<Solution, Selector, Terminator> {
+    operators: Vec<Box<dyn Operator<Solution>>>,
+    selector: Option<Selector>,
+    terminator: Option<Terminator>,
+    rng: Option<Box<dyn rand::RngCore>>,
+}
+
+pub struct TerminationCriteriaDefault {
+    n_iterations_max: usize,
     iteration: usize,
-    iterations_max: usize,
-    n_operators: usize,
-    index_operator: usize,
-    did_improve: bool,
 }
 
-pub struct VNSBuilder<'a, Solution, Callbacks> {
-    operators: Vec<Box<dyn Operator<'a, Solution> + 'a>>,
-    callbacks: Option<Callbacks>,
+impl TerminationCriteriaDefault {
+    pub fn new(n_iterations_max: usize) -> Self {
+        Self {
+            n_iterations_max,
+            iteration: 0,
+        }
+    }
 }
 
-impl<'a, Solution, Callbacks> VNSBuilder<'a, Solution, Callbacks> {
-    pub fn operator<T: Operator<'a, Solution> + 'a>(mut self, operator: T) -> Self {
+impl TerminationCriteria for TerminationCriteriaDefault {
+    fn terminate(&self) -> bool {
+        self.iteration >= self.n_iterations_max
+    }
+}
+
+impl Default for SequentialSelector {
+    fn default() -> Self {
+        Self { operator_index: 0 }
+    }
+}
+
+impl OperatorSelector for SequentialSelector {
+    fn initial_operator(&self) -> usize {
+        0
+    }
+
+    fn select_operator(&mut self, did_improve: bool) -> usize {
+        if did_improve {
+            self.operator_index = 0;
+        } else {
+            self.operator_index += 1;
+        }
+
+        self.operator_index
+    }
+}
+
+impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
+    VNSBuilder<Solution, Selector, Terminator>
+{
+    pub fn operator<T: 'static + Operator<Solution>>(mut self, operator: T) -> Self {
         let operator: Box<dyn Operator<Solution>> = Box::new(operator);
         self.operators.push(operator);
         self
     }
 
-    pub fn callbacks(mut self, callbacks: Callbacks) -> Self {
-        self.callbacks = Some(callbacks);
+    pub fn selector(mut self, selector: Selector) -> Self {
+        self.selector = Some(selector);
         self
     }
 
-    pub fn build(self) -> VariableNeighborhoodSearch<'a, Solution, Callbacks> {
+    pub fn terminator(mut self, termination_criteria: Terminator) -> Self {
+        self.terminator = Some(termination_criteria);
+        self
+    }
+
+    pub fn rng<T: rand::RngCore + 'static>(mut self, rng: T) -> Self {
+        self.rng = Some(Box::new(rng));
+        self
+    }
+
+    pub fn build(self) -> VariableNeighborhoodSearch<Solution, Selector, Terminator> {
+        let rng: Box<dyn rand::RngCore> = Box::new(rand::thread_rng());
         VariableNeighborhoodSearch {
             operators: self.operators,
-            callbacks: self.callbacks.unwrap(),
+            selector: self.selector.expect("Did not specify an operator selector"),
+            terminator: self
+                .terminator
+                .expect("Did not specify termination criteria"),
+            rng: self.rng.unwrap_or(rng),
         }
     }
 }
 
-impl BasicVNSCallbacks {
-    pub fn new(n_operators: usize) -> Self {
-        Self {
-            objective_best: None,
-            iteration: 0,
-            iterations_no_improvement: 0,
-            iterations_max: std::usize::MAX,
-            n_operators,
-            index_operator: 0,
-            did_improve: false,
-        }
-    }
-
-    pub fn objective_best(&self) -> Option<f32> {
-        self.objective_best
-    }
-
-    pub fn iterations_no_improvement(&self) -> usize {
-        self.iterations_no_improvement
-    }
-
-    pub fn set_objective_best(&mut self, objective: f32) {
-        self.objective_best = Some(objective)
-    }
-}
-
-impl<Solution: Evaluate + Clone> VNSCallbacks<Solution> for BasicVNSCallbacks {
-    fn select_operator(&mut self) -> usize {
-        self.index_operator
-    }
-
-    fn propose_candidate(&mut self, candidate: &Solution) -> bool {
-        let objective_new = candidate.evaluate();
-        match self.objective_best() {
-            Some(objective_old) => {
-                if objective_new > objective_old {
-                    self.did_improve = true;
-                    self.objective_best = Some(objective_new);
-                    self.index_operator = 0;
-                    true
-                } else {
-                    self.did_improve = false;
-                    false
-                }
-            }
-            None => {
-                self.objective_best = Some(objective_new);
-                self.did_improve = true;
-                true
-            }
-        }
-    }
-
-    fn should_terminate(&mut self) -> bool {
-        self.iteration += 1;
-        if self.iteration == self.iterations_max {
-            return true;
-        }
-
-        if !self.did_improve {
-            self.index_operator += 1;
-            self.iterations_no_improvement += 1;
-        }
-
-        if self.iterations_no_improvement == self.n_operators {
-            return true;
-        }
-
-        false
-    }
-}
-
-impl<'a, Solution, Callbacks> VariableNeighborhoodSearch<'a, Solution, Callbacks> {
-    pub fn builder() -> VNSBuilder<'a, Solution, Callbacks> {
-        VNSBuilder {
-            callbacks: None,
-            operators: vec![],
-        }
-    }
-}
-
-impl<'a, Solution, Callbacks> LocalSearchHeuristic<Solution>
-    for VariableNeighborhoodSearch<'a, Solution, Callbacks>
-where
-    Solution: Evaluate + Clone,
-    Callbacks: VNSCallbacks<Solution>,
+impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
+    VariableNeighborhoodSearch<Solution, Selector, Terminator>
 {
-    fn optimize(self, initial_solution: Solution) -> Solution {
+    pub fn builder() -> VNSBuilder<Solution, Selector, Terminator> {
+        VNSBuilder {
+            selector: None,
+            terminator: None,
+            operators: vec![],
+            rng: None,
+        }
+    }
+}
+
+impl<
+        'a,
+        Solution: Evaluate + Clone,
+        Selector: OperatorSelector,
+        Terminator: TerminationCriteria,
+    > LocalSearchHeuristic for VariableNeighborhoodSearch<Solution, Selector, Terminator>
+{
+    type Solution = Solution;
+    fn optimize(mut self, initial_solution: Self::Solution) -> Self::Solution {
         // init
-        let mut best_solution = initial_solution.clone();
-        let mut callbacks = self.callbacks;
+        let terminator = self.terminator;
+        let mut selector = self.selector;
+        let mut operator_index = selector.initial_operator();
+        let mut incumbent = initial_solution.clone();
+        let ref mut rng = self.rng;
 
         loop {
-            let index_operator = callbacks.select_operator();
-            let ref operator = self.operators[index_operator];
-            for neighbor in operator.construct_neighborhood(best_solution.clone()) {
-                if callbacks.propose_candidate(&neighbor) {
-                    best_solution = neighbor;
+            let mut did_improve = false;
+            let ref operator = self.operators[operator_index];
+            incumbent = operator.shake(incumbent, rng);
+            for neighbor in operator.construct_neighborhood(incumbent.clone()) {
+                let objective_incumbent = incumbent.evaluate();
+                let objective_candidate = neighbor.evaluate();
+                if objective_candidate > objective_incumbent {
+                    incumbent = neighbor;
+                    did_improve = true;
                 }
             }
 
-            if callbacks.should_terminate() {
+            // select operator
+            operator_index = selector.select_operator(did_improve);
+            // check if operator index is valid
+            if operator_index >= self.operators.len() {
+                break;
+            }
+
+            // test termination criteria
+            if terminator.terminate() {
                 break;
             }
         }
 
-        best_solution
+        incumbent
     }
 }

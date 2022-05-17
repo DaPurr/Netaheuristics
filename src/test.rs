@@ -1,17 +1,17 @@
 use crate::{
-    vns::{BasicVNSCallbacks, VariableNeighborhoodSearch},
+    vns::{SequentialSelector, TerminationCriteriaDefault, VariableNeighborhoodSearch},
     Evaluate, LocalSearchHeuristic, Operator,
 };
 
 #[test]
 fn vns_single_operator() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
-
-    let callbacks = BasicVNSCallbacks::new(1);
+    let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
         .operator(NeighborsUpUntilN::new(&numbers, 1))
-        .callbacks(callbacks)
+        .selector(SequentialSelector::default())
+        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -26,12 +26,12 @@ fn vns_single_operator() {
 #[test]
 fn vns_single_operator2() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
-
-    let callbacks = BasicVNSCallbacks::new(1);
+    let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
+        .selector(SequentialSelector::default())
         .operator(NeighborsUpUntilN::new(&numbers, 3))
-        .callbacks(callbacks)
+        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -46,13 +46,13 @@ fn vns_single_operator2() {
 #[test]
 fn vns_multiple_operators1() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
-
-    let callbacks = BasicVNSCallbacks::new(2);
+    let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
         .operator(NeighborsUpUntilN::new(&numbers, 1))
         .operator(NeighborsUpUntilN::new(&numbers, 3))
-        .callbacks(callbacks)
+        .selector(SequentialSelector::default())
+        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -67,13 +67,13 @@ fn vns_multiple_operators1() {
 #[test]
 fn vns_multiple_operators2() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
-
-    let callbacks = BasicVNSCallbacks::new(2);
+    let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
         .operator(NeighborsUpUntilN::new(&numbers, 1))
         .operator(NeighborsUpUntilN::new(&numbers, 4))
-        .callbacks(callbacks)
+        .selector(SequentialSelector::default())
+        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -122,8 +122,8 @@ impl Evaluate for Number {
     }
 }
 
-impl<'a> Operator<'a, Number> for NeighborsUpUntilN {
-    fn construct_neighborhood(&self, solution: Number) -> Box<dyn Iterator<Item = Number> + 'a> {
+impl Operator<Number> for NeighborsUpUntilN {
+    fn construct_neighborhood(&self, solution: Number) -> Box<dyn Iterator<Item = Number>> {
         let index_cursor = solution.index;
         Box::new(Self {
             index_cursor: Some(index_cursor),

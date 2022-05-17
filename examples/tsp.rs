@@ -1,5 +1,5 @@
 use heuristics::{
-    vns::{BasicVNSCallbacks, VariableNeighborhoodSearch},
+    vns::{SequentialSelector, TerminationCriteriaDefault, VariableNeighborhoodSearch},
     Evaluate, LocalSearchHeuristic, Operator,
 };
 use rand::{Rng, RngCore, SeedableRng};
@@ -16,20 +16,20 @@ fn main() {
     let cities: Vec<City> = (0..n)
         .map(|_| create_random_city(width, height, &mut rng))
         .collect();
+    let cities = Box::new(cities);
 
-    let random_tour = construct_random_tour(Box::new(cities.clone().into_iter()), &mut rng);
-    let greedy_tour = construct_greedy_tour(Box::new(cities.clone().into_iter()), &mut rng);
+    let random_tour = construct_random_tour(&mut cities.clone().into_iter(), &mut rng);
+    let greedy_tour = construct_greedy_tour(&mut cities.clone().into_iter(), &mut rng);
 
     // optimize with VNS
     let operator_2opt = TwoOpt::new(cities.as_slice());
     let operator_3opt = ThreeOpt::new(cities.as_slice());
 
-    let callbacks = BasicVNSCallbacks::new(2);
-
     let vns = VariableNeighborhoodSearch::builder()
-        .callbacks(callbacks)
+        .selector(SequentialSelector::default())
         .operator(operator_2opt)
         .operator(operator_3opt)
+        .terminator(TerminationCriteriaDefault::new(10))
         .build();
     let vns_tour = vns.optimize(random_tour.clone());
 
@@ -54,16 +54,16 @@ struct Tour {
 }
 
 #[derive(Clone)]
-struct TwoOpt<'a> {
+struct TwoOpt {
     tour: Option<Tour>,
-    cities: &'a [City],
+    cities: Box<Vec<City>>,
     index1: usize,
     index2: usize,
 }
 
-struct ThreeOpt<'a> {
+struct ThreeOpt {
     tour: Option<Tour>,
-    cities: &'a [City],
+    cities: Box<Vec<City>>,
     permutation: ThreeOptPermutation,
     index1: usize,
     index2: usize,
@@ -77,11 +77,11 @@ enum ThreeOptPermutation {
     Four,
 }
 
-impl<'a> TwoOpt<'a> {
-    fn new(cities: &'a [City]) -> Self {
+impl<'a> TwoOpt {
+    fn new(cities: &[City]) -> Self {
         Self {
             tour: None,
-            cities,
+            cities: Box::new(cities.to_owned()),
             index1: 0,
             index2: 0,
         }
@@ -110,7 +110,7 @@ impl<'a> TwoOpt<'a> {
     }
 }
 
-impl<'a> Iterator for TwoOpt<'a> {
+impl<'a> Iterator for TwoOpt {
     type Item = Tour;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -128,19 +128,19 @@ impl<'a> Iterator for TwoOpt<'a> {
     }
 }
 
-impl<'a> Operator<'a, Tour> for TwoOpt<'a> {
-    fn construct_neighborhood(&self, solution: Tour) -> Box<dyn Iterator<Item = Tour> + 'a> {
-        let mut neighborhood = Self::new(self.cities);
+impl Operator<Tour> for TwoOpt {
+    fn construct_neighborhood(&self, solution: Tour) -> Box<dyn Iterator<Item = Tour>> {
+        let mut neighborhood = Self::new(self.cities.as_ref());
         neighborhood.tour = Some(solution);
         Box::new(neighborhood)
     }
 }
 
-impl<'a> ThreeOpt<'a> {
-    fn new(cities: &'a [City]) -> Self {
+impl ThreeOpt {
+    fn new(cities: &[City]) -> Self {
         Self {
             tour: None,
-            cities,
+            cities: Box::new(cities.to_owned()),
             permutation: ThreeOptPermutation::One,
             index1: 0,
             index2: 0,
@@ -198,7 +198,7 @@ impl<'a> ThreeOpt<'a> {
     }
 }
 
-impl<'a> Iterator for ThreeOpt<'a> {
+impl Iterator for ThreeOpt {
     type Item = Tour;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -223,9 +223,9 @@ impl<'a> Iterator for ThreeOpt<'a> {
     }
 }
 
-impl<'a> Operator<'a, Tour> for ThreeOpt<'a> {
-    fn construct_neighborhood(&self, solution: Tour) -> Box<dyn Iterator<Item = Tour> + 'a> {
-        let mut neighborhood = Self::new(self.cities);
+impl Operator<Tour> for ThreeOpt {
+    fn construct_neighborhood(&self, solution: Tour) -> Box<dyn Iterator<Item = Tour>> {
+        let mut neighborhood = Self::new(self.cities.as_ref());
         neighborhood.tour = Some(solution);
         Box::new(neighborhood)
     }
@@ -283,7 +283,7 @@ impl Evaluate for Tour {
     }
 }
 
-fn construct_greedy_tour(cities: Box<dyn Iterator<Item = City>>, rng: &mut dyn RngCore) -> Tour {
+fn construct_greedy_tour(cities: &mut dyn Iterator<Item = City>, rng: &mut dyn RngCore) -> Tour {
     let mut cities: Vec<City> = cities.collect();
     let index_initial_city = rng.gen_range(0..cities.len());
     let city = cities.remove(index_initial_city);
@@ -297,7 +297,7 @@ fn construct_greedy_tour(cities: Box<dyn Iterator<Item = City>>, rng: &mut dyn R
     Tour::new(cities_tour)
 }
 
-fn construct_random_tour(cities: Box<dyn Iterator<Item = City>>, rng: &mut dyn RngCore) -> Tour {
+fn construct_random_tour(cities: &mut dyn Iterator<Item = City>, rng: &mut dyn RngCore) -> Tour {
     let mut cities: Vec<City> = cities.collect();
     let mut cities_tour = vec![];
 
