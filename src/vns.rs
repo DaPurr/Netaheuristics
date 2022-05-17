@@ -1,57 +1,119 @@
-use std::cell::RefCell;
-
 use crate::{Evaluate, LocalSearchHeuristic, Operator};
 
 pub struct VariableNeighborhoodSearch<'a, Solution, Callbacks> {
     operators: Vec<Box<dyn Operator<'a, Solution> + 'a>>,
-    callbacks: Option<RefCell<Callbacks>>,
+    callbacks: Callbacks,
 }
 
 pub trait VNSCallbacks<Solution>
 where
     Solution: Evaluate,
 {
-    #[allow(unused_variables)]
-    fn propose_candidate(&mut self, candidate: &Solution) {}
-
-    fn should_terminate(&mut self) -> bool {
-        false
-    }
+    fn select_operator(&mut self) -> usize;
+    fn propose_candidate(&mut self, candidate: &Solution) -> bool;
+    fn should_terminate(&mut self) -> bool;
 }
 
 pub struct BasicVNSCallbacks {
+    objective_best: Option<f32>,
+    iterations_no_improvement: usize,
     iteration: usize,
-    iteration_max: usize,
-    iteration_no_improvement: usize,
+    iterations_max: usize,
     n_operators: usize,
-    best_objective: Option<f32>,
+    index_operator: usize,
+    did_improve: bool,
+}
+
+pub struct VNSBuilder<'a, Solution, Callbacks> {
+    operators: Vec<Box<dyn Operator<'a, Solution> + 'a>>,
+    callbacks: Option<Callbacks>,
+}
+
+impl<'a, Solution, Callbacks> VNSBuilder<'a, Solution, Callbacks> {
+    pub fn operator<T: Operator<'a, Solution> + 'a>(mut self, operator: T) -> Self {
+        let operator: Box<dyn Operator<Solution>> = Box::new(operator);
+        self.operators.push(operator);
+        self
+    }
+
+    pub fn callbacks(mut self, callbacks: Callbacks) -> Self {
+        self.callbacks = Some(callbacks);
+        self
+    }
+
+    pub fn build(self) -> VariableNeighborhoodSearch<'a, Solution, Callbacks> {
+        VariableNeighborhoodSearch {
+            operators: self.operators,
+            callbacks: self.callbacks.unwrap(),
+        }
+    }
+}
+
+impl BasicVNSCallbacks {
+    pub fn new(n_operators: usize) -> Self {
+        Self {
+            objective_best: None,
+            iteration: 0,
+            iterations_no_improvement: 0,
+            iterations_max: std::usize::MAX,
+            n_operators,
+            index_operator: 0,
+            did_improve: false,
+        }
+    }
+
+    pub fn objective_best(&self) -> Option<f32> {
+        self.objective_best
+    }
+
+    pub fn iterations_no_improvement(&self) -> usize {
+        self.iterations_no_improvement
+    }
+
+    pub fn set_objective_best(&mut self, objective: f32) {
+        self.objective_best = Some(objective)
+    }
 }
 
 impl<Solution: Evaluate + Clone> VNSCallbacks<Solution> for BasicVNSCallbacks {
-    fn propose_candidate(&mut self, candidate: &Solution) {
+    fn select_operator(&mut self) -> usize {
+        self.index_operator
+    }
+
+    fn propose_candidate(&mut self, candidate: &Solution) -> bool {
         let objective_new = candidate.evaluate();
-        match &self.best_objective {
+        match self.objective_best() {
             Some(objective_old) => {
-                if objective_new > *objective_old {
-                    self.best_objective = Some(objective_new);
-                    self.iteration_no_improvement = 0;
+                if objective_new > objective_old {
+                    self.did_improve = true;
+                    self.objective_best = Some(objective_new);
+                    self.index_operator = 0;
+                    true
                 } else {
-                    self.iteration_no_improvement += 1;
+                    self.did_improve = false;
+                    false
                 }
             }
             None => {
-                self.best_objective = Some(objective_new);
+                self.objective_best = Some(objective_new);
+                self.did_improve = true;
+                true
             }
         }
     }
 
     fn should_terminate(&mut self) -> bool {
         self.iteration += 1;
-        if self.iteration >= self.iteration_max {
+        if self.iteration == self.iterations_max {
             return true;
         }
 
-        if self.iteration_no_improvement >= self.n_operators {
+        if !self.did_improve {
+            self.index_operator += 1;
+            self.iterations_no_improvement += 1;
+        }
+
+        if self.iterations_no_improvement == self.n_operators {
             return true;
         }
 
@@ -60,22 +122,10 @@ impl<Solution: Evaluate + Clone> VNSCallbacks<Solution> for BasicVNSCallbacks {
 }
 
 impl<'a, Solution, Callbacks> VariableNeighborhoodSearch<'a, Solution, Callbacks> {
-    pub fn with_operators<T: IntoIterator<Item = Box<dyn Operator<'a, Solution> + 'a>>>(
-        operators: T,
-    ) -> Self {
-        Self {
-            operators: operators.into_iter().collect(),
+    pub fn builder() -> VNSBuilder<'a, Solution, Callbacks> {
+        VNSBuilder {
             callbacks: None,
-        }
-    }
-
-    pub fn with_callbacks<T: IntoIterator<Item = Box<dyn Operator<'a, Solution> + 'a>>>(
-        operators: T,
-        callbacks: Callbacks,
-    ) -> Self {
-        Self {
-            operators: operators.into_iter().collect(),
-            callbacks: Some(RefCell::new(callbacks)),
+            operators: vec![],
         }
     }
 }
@@ -86,46 +136,21 @@ where
     Solution: Evaluate + Clone,
     Callbacks: VNSCallbacks<Solution>,
 {
-    fn optimize(&self, initial_solution: Solution) -> Solution {
+    fn optimize(self, initial_solution: Solution) -> Solution {
         // init
         let mut best_solution = initial_solution.clone();
-        let mut index_operator = 0;
-        let mut iterations_no_improvement = 0;
-        loop {
-            let ref operator = self.operators[index_operator];
+        let mut callbacks = self.callbacks;
 
-            // explore entire neighborhood
-            let mut is_improved_inside_neighborhood = false;
-            for neighbor in operator
-                .construct_neighborhood(best_solution.clone())
-                .into_iter()
-            {
-                if let Some(callbacks) = &self.callbacks {
-                    callbacks.borrow_mut().propose_candidate(&neighbor);
-                }
-                let fitness = neighbor.evaluate();
-                if fitness > best_solution.evaluate() {
-                    is_improved_inside_neighborhood = true;
+        loop {
+            let index_operator = callbacks.select_operator();
+            let ref operator = self.operators[index_operator];
+            for neighbor in operator.construct_neighborhood(best_solution.clone()) {
+                if callbacks.propose_candidate(&neighbor) {
                     best_solution = neighbor;
                 }
             }
 
-            if is_improved_inside_neighborhood {
-                // improved, so go to first neighborhood
-                index_operator = 0;
-            } else {
-                // go to next neighborhoood
-                index_operator += 1;
-                iterations_no_improvement += 1;
-            }
-
-            if let Some(callbacks) = &self.callbacks {
-                if callbacks.borrow_mut().should_terminate() {
-                    break;
-                }
-            }
-
-            if iterations_no_improvement >= self.operators.len() {
+            if callbacks.should_terminate() {
                 break;
             }
         }

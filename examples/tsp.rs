@@ -21,13 +21,16 @@ fn main() {
     let greedy_tour = construct_greedy_tour(Box::new(cities.clone().into_iter()), &mut rng);
 
     // optimize with VNS
-    let operator_2opt: Box<dyn Operator<Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
-    let operator_3opt: Box<dyn Operator<Tour>> = Box::new(ThreeOpt::new(cities.as_slice()));
-    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
-        VariableNeighborhoodSearch::with_operators([
-            // operator_2opt,
-            operator_3opt,
-        ]);
+    let operator_2opt = TwoOpt::new(cities.as_slice());
+    let operator_3opt = ThreeOpt::new(cities.as_slice());
+
+    let callbacks = BasicVNSCallbacks::new(2);
+
+    let vns = VariableNeighborhoodSearch::builder()
+        .callbacks(callbacks)
+        .operator(operator_2opt)
+        .operator(operator_3opt)
+        .build();
     let vns_tour = vns.optimize(random_tour.clone());
 
     let length_random_tour = random_tour.evaluate();

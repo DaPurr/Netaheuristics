@@ -12,7 +12,7 @@ pub trait Operator<'a, Solution> {
 }
 
 pub trait LocalSearchHeuristic<Solution> {
-    fn optimize(&self, solution: Solution) -> Solution;
+    fn optimize(self, solution: Solution) -> Solution;
 }
 
 pub trait TerminationCriteria<State> {

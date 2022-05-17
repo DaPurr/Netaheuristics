@@ -7,9 +7,12 @@ use crate::{
 fn vns_single_operator() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
-    let operator: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
-    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
-        VariableNeighborhoodSearch::with_operators([operator]);
+    let callbacks = BasicVNSCallbacks::new(1);
+
+    let vns = VariableNeighborhoodSearch::builder()
+        .operator(NeighborsUpUntilN::new(&numbers, 1))
+        .callbacks(callbacks)
+        .build();
 
     let initial_solution = Number {
         index: 0,
@@ -24,9 +27,12 @@ fn vns_single_operator() {
 fn vns_single_operator2() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
-    let operator: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 3));
-    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
-        VariableNeighborhoodSearch::with_operators([operator]);
+    let callbacks = BasicVNSCallbacks::new(1);
+
+    let vns = VariableNeighborhoodSearch::builder()
+        .operator(NeighborsUpUntilN::new(&numbers, 3))
+        .callbacks(callbacks)
+        .build();
 
     let initial_solution = Number {
         index: 0,
@@ -41,10 +47,13 @@ fn vns_single_operator2() {
 fn vns_multiple_operators1() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
-    let operator1: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
-    let operator2: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 3));
-    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
-        VariableNeighborhoodSearch::with_operators([operator1, operator2]);
+    let callbacks = BasicVNSCallbacks::new(2);
+
+    let vns = VariableNeighborhoodSearch::builder()
+        .operator(NeighborsUpUntilN::new(&numbers, 1))
+        .operator(NeighborsUpUntilN::new(&numbers, 3))
+        .callbacks(callbacks)
+        .build();
 
     let initial_solution = Number {
         index: 0,
@@ -59,10 +68,13 @@ fn vns_multiple_operators1() {
 fn vns_multiple_operators2() {
     let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
 
-    let operator1: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 1));
-    let operator2: Box<dyn Operator<Number>> = Box::new(NeighborsUpUntilN::new(&numbers, 4));
-    let vns: VariableNeighborhoodSearch<_, BasicVNSCallbacks> =
-        VariableNeighborhoodSearch::with_operators([operator1, operator2]);
+    let callbacks = BasicVNSCallbacks::new(2);
+
+    let vns = VariableNeighborhoodSearch::builder()
+        .operator(NeighborsUpUntilN::new(&numbers, 1))
+        .operator(NeighborsUpUntilN::new(&numbers, 4))
+        .callbacks(callbacks)
+        .build();
 
     let initial_solution = Number {
         index: 0,
