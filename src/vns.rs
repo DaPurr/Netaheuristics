@@ -29,30 +29,6 @@ pub struct VNSBuilder<'a, Solution, Callbacks> {
     callbacks: Option<Callbacks>,
 }
 
-pub trait OperatorSelector {
-    fn select_operator(&self) -> usize;
-}
-
-pub trait TerminationCriteria {
-    fn should_terminate(&self) -> bool;
-}
-
-pub struct SimpleOperatorSelector;
-
-pub struct SimpleTerminationCriteria;
-
-impl OperatorSelector for SimpleOperatorSelector {
-    fn select_operator(&self) -> usize {
-        todo!()
-    }
-}
-
-impl TerminationCriteria for SimpleTerminationCriteria {
-    fn should_terminate(&self) -> bool {
-        todo!()
-    }
-}
-
 impl<'a, Solution, Callbacks> VNSBuilder<'a, Solution, Callbacks> {
     pub fn operator<T: Operator<'a, Solution> + 'a>(mut self, operator: T) -> Self {
         let operator: Box<dyn Operator<Solution>> = Box::new(operator);

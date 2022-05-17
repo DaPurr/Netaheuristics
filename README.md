@@ -2,7 +2,7 @@
 
 ## Description
 
-This crate's intended purpose is to simplify the user's design of metaheuristic, by offering a modular framework for several popular types. For each such type, default modules are also offered so that the user only needs to focus only on the problem-specific parts.
+This crate's intended purpose is to offer a highly customizable framework for popular metaheuristics, while simultaneously offering default implementations such that the user only needs to focus on the problem-specific aspects of heuristics design.
 
 
 
