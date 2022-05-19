@@ -123,12 +123,8 @@ impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
     }
 }
 
-impl<
-        'a,
-        Solution: Evaluate + Clone,
-        Selector: OperatorSelector,
-        Terminator: TerminationCriteria,
-    > LocalSearchHeuristic for VariableNeighborhoodSearch<Solution, Selector, Terminator>
+impl<Solution: Evaluate + Clone, Selector: OperatorSelector, Terminator: TerminationCriteria>
+    LocalSearchHeuristic for VariableNeighborhoodSearch<Solution, Selector, Terminator>
 {
     type Solution = Solution;
     fn optimize(mut self, initial_solution: Self::Solution) -> Self::Solution {
@@ -140,16 +136,15 @@ impl<
         let ref mut rng = self.rng;
 
         loop {
+            // init
             let mut did_improve = false;
             let ref operator = self.operators[operator_index];
-            incumbent = operator.shake(incumbent, rng);
-            for neighbor in operator.construct_neighborhood(incumbent.clone()) {
-                let objective_incumbent = incumbent.evaluate();
-                let objective_candidate = neighbor.evaluate();
-                if objective_candidate > objective_incumbent {
-                    incumbent = neighbor;
-                    did_improve = true;
-                }
+
+            let shaken = operator.shake(incumbent.clone(), rng);
+            let best_neighbor = operator.find_best_neighbor(shaken);
+            if best_neighbor.evaluate() > incumbent.evaluate() {
+                incumbent = best_neighbor;
+                did_improve = true;
             }
 
             // select operator

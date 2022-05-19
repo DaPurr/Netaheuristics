@@ -13,6 +13,23 @@ pub trait Operator<Solution> {
     fn shake(&self, solution: Solution, rng: &mut dyn rand::RngCore) -> Solution {
         solution
     }
+
+    fn find_best_neighbor(&self, solution: Solution) -> Solution
+    where
+        Solution: Evaluate,
+    {
+        let mut winner: Option<Solution> = None;
+        for neighbor in self.construct_neighborhood(solution) {
+            if let Some(x) = &winner {
+                if neighbor.evaluate() > x.evaluate() {
+                    winner = Some(neighbor);
+                }
+            } else {
+                winner = Some(neighbor);
+            }
+        }
+        winner.expect("neighborhood was empty")
+    }
 }
 
 pub trait LocalSearchHeuristic {
