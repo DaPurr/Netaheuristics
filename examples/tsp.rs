@@ -1,5 +1,6 @@
 use heuristics::{
-    vns::{SequentialSelector, TerminationCriteriaDefault, VariableNeighborhoodSearch},
+    termination::Terminator,
+    vns::{SequentialSelector, VariableNeighborhoodSearch},
     Evaluate, LocalSearchHeuristic, Operator,
 };
 use rand::{Rng, RngCore, SeedableRng};
@@ -29,13 +30,13 @@ fn main() {
         .selector(SequentialSelector::default())
         .operator(operator_2opt)
         .operator(operator_3opt)
-        .terminator(TerminationCriteriaDefault::new(10))
+        .terminator(Terminator::builder().iterations(10).build())
         .build();
     let vns_tour = vns.optimize(random_tour.clone());
 
-    let length_random_tour = random_tour.evaluate();
-    let length_greedy_tour = greedy_tour.evaluate();
-    let length_vns_tour = vns_tour.evaluate();
+    let length_random_tour = -random_tour.evaluate();
+    let length_greedy_tour = -greedy_tour.evaluate();
+    let length_vns_tour = -vns_tour.evaluate();
 
     println!("random tour length: {}", length_random_tour);
     println!("greedy tour length: {}", length_greedy_tour);

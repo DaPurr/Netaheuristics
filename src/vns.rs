@@ -1,13 +1,9 @@
-use crate::{Evaluate, LocalSearchHeuristic, Operator};
+use crate::{termination::TerminationCriteria, Evaluate, LocalSearchHeuristic, Operator};
 
-pub struct VariableNeighborhoodSearch<
-    Solution,
-    Selector: OperatorSelector,
-    Terminator: TerminationCriteria,
-> {
+pub struct VariableNeighborhoodSearch<Solution, Selector: OperatorSelector> {
     operators: Vec<Box<dyn Operator<Solution>>>,
     selector: Selector,
-    terminator: Terminator,
+    terminator: Box<dyn TerminationCriteria<Solution>>,
     rng: Box<dyn rand::RngCore>,
 }
 
@@ -20,35 +16,11 @@ pub trait OperatorSelector {
     fn select_operator(&mut self, did_improve: bool) -> usize;
 }
 
-pub trait TerminationCriteria {
-    fn terminate(&self) -> bool;
-}
-
-pub struct VNSBuilder<Solution, Selector, Terminator> {
+pub struct VNSBuilder<Solution, Selector> {
     operators: Vec<Box<dyn Operator<Solution>>>,
     selector: Option<Selector>,
-    terminator: Option<Terminator>,
+    terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
-}
-
-pub struct TerminationCriteriaDefault {
-    n_iterations_max: usize,
-    iteration: usize,
-}
-
-impl TerminationCriteriaDefault {
-    pub fn new(n_iterations_max: usize) -> Self {
-        Self {
-            n_iterations_max,
-            iteration: 0,
-        }
-    }
-}
-
-impl TerminationCriteria for TerminationCriteriaDefault {
-    fn terminate(&self) -> bool {
-        self.iteration >= self.n_iterations_max
-    }
 }
 
 impl Default for SequentialSelector {
@@ -73,9 +45,7 @@ impl OperatorSelector for SequentialSelector {
     }
 }
 
-impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
-    VNSBuilder<Solution, Selector, Terminator>
-{
+impl<'a, Solution, Selector: OperatorSelector> VNSBuilder<Solution, Selector> {
     pub fn operator<T: 'static + Operator<Solution>>(mut self, operator: T) -> Self {
         let operator: Box<dyn Operator<Solution>> = Box::new(operator);
         self.operators.push(operator);
@@ -87,8 +57,8 @@ impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
         self
     }
 
-    pub fn terminator(mut self, termination_criteria: Terminator) -> Self {
-        self.terminator = Some(termination_criteria);
+    pub fn terminator(mut self, terminator: Box<dyn TerminationCriteria<Solution>>) -> Self {
+        self.terminator = Some(terminator);
         self
     }
 
@@ -97,7 +67,7 @@ impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
         self
     }
 
-    pub fn build(self) -> VariableNeighborhoodSearch<Solution, Selector, Terminator> {
+    pub fn build(self) -> VariableNeighborhoodSearch<Solution, Selector> {
         let rng: Box<dyn rand::RngCore> = Box::new(rand::thread_rng());
         VariableNeighborhoodSearch {
             operators: self.operators,
@@ -110,21 +80,19 @@ impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
     }
 }
 
-impl<'a, Solution, Selector: OperatorSelector, Terminator: TerminationCriteria>
-    VariableNeighborhoodSearch<Solution, Selector, Terminator>
-{
-    pub fn builder() -> VNSBuilder<Solution, Selector, Terminator> {
+impl<'a, Solution, Selector: OperatorSelector> VariableNeighborhoodSearch<Solution, Selector> {
+    pub fn builder() -> VNSBuilder<Solution, Selector> {
         VNSBuilder {
             selector: None,
-            terminator: None,
             operators: vec![],
             rng: None,
+            terminator: None,
         }
     }
 }
 
-impl<Solution: Evaluate + Clone, Selector: OperatorSelector, Terminator: TerminationCriteria>
-    LocalSearchHeuristic for VariableNeighborhoodSearch<Solution, Selector, Terminator>
+impl<Solution: Evaluate + Clone, Selector: OperatorSelector> LocalSearchHeuristic
+    for VariableNeighborhoodSearch<Solution, Selector>
 {
     type Solution = Solution;
     fn optimize(mut self, initial_solution: Self::Solution) -> Self::Solution {
@@ -155,7 +123,7 @@ impl<Solution: Evaluate + Clone, Selector: OperatorSelector, Terminator: Termina
             }
 
             // test termination criteria
-            if terminator.terminate() {
+            if terminator.terminate(&incumbent) {
                 break;
             }
         }

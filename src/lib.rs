@@ -1,3 +1,4 @@
+pub mod termination;
 #[cfg(test)]
 mod test;
 pub mod vns;
@@ -35,8 +36,4 @@ pub trait Operator<Solution> {
 pub trait LocalSearchHeuristic {
     type Solution: Evaluate + Clone;
     fn optimize(self, solution: Self::Solution) -> Self::Solution;
-}
-
-pub trait TerminationCriteria<State> {
-    fn terminate(&self, state: &State) -> bool;
 }

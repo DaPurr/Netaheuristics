@@ -1,5 +1,6 @@
 use crate::{
-    vns::{SequentialSelector, TerminationCriteriaDefault, VariableNeighborhoodSearch},
+    termination::Terminator,
+    vns::{SequentialSelector, VariableNeighborhoodSearch},
     Evaluate, LocalSearchHeuristic, Operator,
 };
 
@@ -11,7 +12,7 @@ fn vns_single_operator() {
     let vns = VariableNeighborhoodSearch::builder()
         .operator(NeighborsUpUntilN::new(&numbers, 1))
         .selector(SequentialSelector::default())
-        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
+        .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
 
     let initial_solution = Number {
@@ -31,7 +32,7 @@ fn vns_single_operator2() {
     let vns = VariableNeighborhoodSearch::builder()
         .selector(SequentialSelector::default())
         .operator(NeighborsUpUntilN::new(&numbers, 3))
-        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
+        .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
 
     let initial_solution = Number {
@@ -52,7 +53,7 @@ fn vns_multiple_operators1() {
         .operator(NeighborsUpUntilN::new(&numbers, 1))
         .operator(NeighborsUpUntilN::new(&numbers, 3))
         .selector(SequentialSelector::default())
-        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
+        .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
 
     let initial_solution = Number {
@@ -73,7 +74,7 @@ fn vns_multiple_operators2() {
         .operator(NeighborsUpUntilN::new(&numbers, 1))
         .operator(NeighborsUpUntilN::new(&numbers, 4))
         .selector(SequentialSelector::default())
-        .terminator(TerminationCriteriaDefault::new(n_iterations_max))
+        .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
 
     let initial_solution = Number {
