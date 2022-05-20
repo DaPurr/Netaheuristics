@@ -1,7 +1,8 @@
 use heuristics::{
+    sa::SimulatedAnnealing,
     termination::Terminator,
-    vns::{SequentialSelector, VariableNeighborhoodSearch},
-    Evaluate, Heuristic, Operator,
+    vns::{RandomSelector, SequentialSelector, VariableNeighborhoodSearch},
+    Evaluate, Heuristic, Operator, StochasticOperator,
 };
 use rand::{Rng, RngCore, SeedableRng};
 
@@ -34,22 +35,35 @@ fn main() {
         .build();
     let vns_tour = vns.optimize(random_tour.clone());
 
-    let length_random_tour = -random_tour.evaluate();
-    let length_greedy_tour = -greedy_tour.evaluate();
-    let length_vns_tour = -vns_tour.evaluate();
+    let temperature = 100.;
+    let n_iterations = 10_000;
+    let sa = SimulatedAnnealing::builder()
+        .selector(RandomSelector::new(rng.clone(), 1))
+        .operator(TwoOptRandom)
+        .temperature(temperature)
+        .criterium(Terminator::builder().iterations(n_iterations).build())
+        .rng(rng.clone())
+        .build();
+    let sa_tour = sa.optimize(random_tour.clone());
+
+    let length_random_tour = random_tour.evaluate();
+    let length_greedy_tour = greedy_tour.evaluate();
+    let length_vns_tour = vns_tour.evaluate();
+    let length_sa_tour = sa_tour.evaluate();
 
     println!("random tour length: {}", length_random_tour);
     println!("greedy tour length: {}", length_greedy_tour);
     println!("vns tour length: {}", length_vns_tour);
+    println!("sa tour length: {}", length_sa_tour);
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct City {
     x: f32,
     y: f32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Tour {
     cities: Vec<City>,
 }
@@ -61,6 +75,8 @@ struct TwoOpt {
     index1: usize,
     index2: usize,
 }
+
+struct TwoOptRandom;
 
 struct ThreeOpt {
     tour: Option<Tour>,
@@ -76,6 +92,19 @@ enum ThreeOptPermutation {
     Two,
     Three,
     Four,
+}
+
+impl StochasticOperator for TwoOptRandom {
+    type Solution = Tour;
+    fn shake(&self, solution: Tour, rng: &mut dyn rand::RngCore) -> Self::Solution {
+        let n = solution.cities.len();
+        let index1 = rng.gen_range(0..n);
+        let index2 = rng.gen_range(0..n);
+
+        let mut neighbor = solution.clone();
+        neighbor.cities.swap(index1, index2);
+        neighbor
+    }
 }
 
 impl<'a> TwoOpt {
@@ -129,10 +158,11 @@ impl<'a> Iterator for TwoOpt {
     }
 }
 
-impl Operator<Tour> for TwoOpt {
+impl Operator for TwoOpt {
+    type Solution = Tour;
     fn construct_neighborhood(&self, solution: Tour) -> Box<dyn Iterator<Item = Tour>> {
         let mut neighborhood = Self::new(self.cities.as_ref());
-        neighborhood.tour = Some(solution);
+        neighborhood.tour = Some(solution.clone());
         Box::new(neighborhood)
     }
 }
@@ -224,10 +254,11 @@ impl Iterator for ThreeOpt {
     }
 }
 
-impl Operator<Tour> for ThreeOpt {
+impl Operator for ThreeOpt {
+    type Solution = Tour;
     fn construct_neighborhood(&self, solution: Tour) -> Box<dyn Iterator<Item = Tour>> {
         let mut neighborhood = Self::new(self.cities.as_ref());
-        neighborhood.tour = Some(solution);
+        neighborhood.tour = Some(solution.clone());
         Box::new(neighborhood)
     }
 }
@@ -280,7 +311,7 @@ impl Evaluate for Tour {
             sum += distance(city1, city2);
         }
 
-        -sum
+        sum
     }
 }
 

@@ -11,6 +11,7 @@
 //!
 //! and their adaptive variants.
 
+pub mod sa;
 pub mod termination;
 #[cfg(test)]
 mod test;
@@ -22,25 +23,20 @@ pub trait Evaluate {
 }
 
 /// An local search operator returns the neighborhood of its argument.
-pub trait Operator<Solution> {
+pub trait Operator {
+    type Solution: Evaluate;
     /// Construct the neighborhood ```solution```.
-    fn construct_neighborhood(&self, solution: Solution) -> Box<dyn Iterator<Item = Solution>>;
-
-    /// Return a random neighbor of ```solution```, with respect to the neighborhood induced by this operator, using ```rng``` as source of randomness.
-    #[allow(unused_variables)]
-    fn shake(&self, solution: Solution, rng: &mut dyn rand::RngCore) -> Solution {
-        solution
-    }
+    fn construct_neighborhood(
+        &self,
+        solution: Self::Solution,
+    ) -> Box<dyn Iterator<Item = Self::Solution>>;
 
     /// Return the optimal neighbor of ```solution```.
-    fn find_best_neighbor(&self, solution: Solution) -> Solution
-    where
-        Solution: Evaluate,
-    {
-        let mut winner: Option<Solution> = None;
+    fn find_best_neighbor(&self, solution: Self::Solution) -> Self::Solution {
+        let mut winner: Option<Self::Solution> = None;
         for neighbor in self.construct_neighborhood(solution) {
             if let Some(x) = &winner {
-                if neighbor.evaluate() > x.evaluate() {
+                if neighbor.evaluate() < x.evaluate() {
                     winner = Some(neighbor);
                 }
             } else {
@@ -51,7 +47,13 @@ pub trait Operator<Solution> {
     }
 }
 
+pub trait StochasticOperator {
+    type Solution;
+    /// Return a random neighbor of ```solution```, with respect to the neighborhood induced by this operator, using ```rng``` as source of randomness.
+    fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
+}
+
 pub trait Heuristic {
-    type Solution: Evaluate + Clone;
+    type Solution: Evaluate;
     fn optimize(self, solution: Self::Solution) -> Self::Solution;
 }

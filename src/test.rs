@@ -1,12 +1,15 @@
+use rand::{Rng, SeedableRng};
+
 use crate::{
+    sa::SimulatedAnnealing,
     termination::Terminator,
-    vns::{SequentialSelector, VariableNeighborhoodSearch},
-    Evaluate, Heuristic, Operator,
+    vns::{RandomSelector, SequentialSelector, VariableNeighborhoodSearch},
+    Evaluate, Heuristic, Operator, StochasticOperator,
 };
 
 #[test]
-fn vns_single_operator() {
-    let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
+fn vns_single_operator1() {
+    let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
     let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
@@ -26,7 +29,7 @@ fn vns_single_operator() {
 
 #[test]
 fn vns_single_operator2() {
-    let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
+    let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
     let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
@@ -46,7 +49,7 @@ fn vns_single_operator2() {
 
 #[test]
 fn vns_multiple_operators1() {
-    let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
+    let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
     let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
@@ -67,7 +70,7 @@ fn vns_multiple_operators1() {
 
 #[test]
 fn vns_multiple_operators2() {
-    let numbers = vec![0., 1., 2., 1., 0., 2., 4., 9.];
+    let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
     let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
@@ -86,7 +89,31 @@ fn vns_multiple_operators2() {
     assert_eq!(vns_solution.index, 7)
 }
 
-#[derive(Clone)]
+#[test]
+fn sa_single_operator() {
+    let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
+    let rng = rand::rngs::StdRng::seed_from_u64(0);
+    let temperature = 100.;
+    let n_iterations_max = 100;
+
+    let sa = SimulatedAnnealing::builder()
+        .operator(NeighborSwap::new(&numbers))
+        .selector(RandomSelector::new(rng.clone(), 1))
+        .criterium(Terminator::builder().iterations(n_iterations_max).build())
+        .rng(rng)
+        .temperature(temperature)
+        .build();
+
+    let initial_solution = Number {
+        index: 0,
+        value: numbers[0],
+    };
+
+    let sa_solution = sa.optimize(initial_solution);
+    assert_eq!(sa_solution.index, 7);
+}
+
+#[derive(Clone, Debug)]
 struct Number {
     value: f32,
     index: usize,
@@ -97,6 +124,42 @@ struct NeighborsUpUntilN {
     index_cursor: Option<usize>,
     iter: isize,
     n: usize,
+}
+
+struct NeighborSwap {
+    numbers: Vec<Number>,
+}
+
+impl NeighborSwap {
+    pub fn new(numbers: &[f32]) -> Self {
+        Self {
+            numbers: numbers
+                .iter()
+                .enumerate()
+                .map(|(index, x)| Number { index, value: *x })
+                .collect(),
+        }
+    }
+}
+
+impl StochasticOperator for NeighborSwap {
+    type Solution = Number;
+    fn shake(&self, solution: Number, rng: &mut dyn rand::RngCore) -> Self::Solution {
+        let index = solution.index;
+        let mut options = vec![];
+        if index as isize - 1 >= 0 {
+            options.push(self.numbers[index - 1].clone());
+        }
+        if index + 1 < self.numbers.len() {
+            options.push(self.numbers[index + 1].clone());
+        }
+
+        if options.len() == 1 {
+            options.remove(0)
+        } else {
+            options.remove(rng.gen_range(0..2))
+        }
+    }
 }
 
 impl NeighborsUpUntilN {
@@ -123,7 +186,8 @@ impl Evaluate for Number {
     }
 }
 
-impl Operator<Number> for NeighborsUpUntilN {
+impl Operator for NeighborsUpUntilN {
+    type Solution = Number;
     fn construct_neighborhood(&self, solution: Number) -> Box<dyn Iterator<Item = Number>> {
         let index_cursor = solution.index;
         Box::new(Self {
