@@ -1,5 +1,5 @@
 //! Contains all types which are specific to _variable neighborhood search_.
-use crate::{termination::TerminationCriteria, Evaluate, LocalSearchHeuristic, Operator};
+use crate::{termination::TerminationCriteria, Evaluate, Heuristic, Operator};
 
 /// Implementation of _variable neighborhood search_ according to [here](https://en.wikipedia.org/wiki/Variable_neighborhood_search).
 pub struct VariableNeighborhoodSearch<Solution, Selector: OperatorSelector> {
@@ -106,7 +106,7 @@ impl<'a, Solution, Selector: OperatorSelector> VariableNeighborhoodSearch<Soluti
     }
 }
 
-impl<Solution: Evaluate + Clone, Selector: OperatorSelector> LocalSearchHeuristic
+impl<Solution: Evaluate + Clone, Selector: OperatorSelector> Heuristic
     for VariableNeighborhoodSearch<Solution, Selector>
 {
     /// Implementation of the _variable neighborhood search_ routine.

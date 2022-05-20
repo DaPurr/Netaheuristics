@@ -1,7 +1,7 @@
 use crate::{
     termination::Terminator,
     vns::{SequentialSelector, VariableNeighborhoodSearch},
-    Evaluate, LocalSearchHeuristic, Operator,
+    Evaluate, Heuristic, Operator,
 };
 
 #[test]

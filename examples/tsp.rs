@@ -1,7 +1,7 @@
 use heuristics::{
     termination::Terminator,
     vns::{SequentialSelector, VariableNeighborhoodSearch},
-    Evaluate, LocalSearchHeuristic, Operator,
+    Evaluate, Heuristic, Operator,
 };
 use rand::{Rng, RngCore, SeedableRng};
 

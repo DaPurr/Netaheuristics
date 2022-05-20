@@ -51,7 +51,7 @@ pub trait Operator<Solution> {
     }
 }
 
-pub trait LocalSearchHeuristic {
+pub trait Heuristic {
     type Solution: Evaluate + Clone;
     fn optimize(self, solution: Self::Solution) -> Self::Solution;
 }
