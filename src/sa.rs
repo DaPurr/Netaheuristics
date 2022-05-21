@@ -1,8 +1,7 @@
 use rand::Rng;
 
 use crate::{
-    termination::TerminationCriteria, vns::OperatorSelector, Evaluate, Heuristic,
-    StochasticOperator,
+    termination::TerminationCriteria, Evaluate, Heuristic, OperatorSelector, StochasticOperator,
 };
 
 pub struct SimulatedAnnealing<Solution> {
@@ -46,7 +45,7 @@ impl<Solution> SABuilder<Solution> {
         }
     }
 
-    pub fn criterium(mut self, criterium: Box<dyn TerminationCriteria<Solution>>) -> Self {
+    pub fn terminator(mut self, criterium: Box<dyn TerminationCriteria<Solution>>) -> Self {
         self.terminator = Some(criterium);
         self
     }

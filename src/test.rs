@@ -1,10 +1,8 @@
 use rand::{Rng, SeedableRng};
 
 use crate::{
-    sa::SimulatedAnnealing,
-    termination::Terminator,
-    vns::{RandomSelector, SequentialSelector, VariableNeighborhoodSearch},
-    Evaluate, Heuristic, Operator, StochasticOperator,
+    sa::SimulatedAnnealing, termination::Terminator, vns::VariableNeighborhoodSearch, Evaluate,
+    Heuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
 };
 
 #[test]
@@ -14,7 +12,7 @@ fn vns_single_operator1() {
 
     let vns = VariableNeighborhoodSearch::builder()
         .operator(NeighborsUpUntilN::new(&numbers, 1))
-        .selector(SequentialSelector::default())
+        .selector(SequentialSelector::new(1))
         .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
 
@@ -33,7 +31,7 @@ fn vns_single_operator2() {
     let n_iterations_max = 10;
 
     let vns = VariableNeighborhoodSearch::builder()
-        .selector(SequentialSelector::default())
+        .selector(SequentialSelector::new(1))
         .operator(NeighborsUpUntilN::new(&numbers, 3))
         .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
@@ -55,7 +53,7 @@ fn vns_multiple_operators1() {
     let vns = VariableNeighborhoodSearch::builder()
         .operator(NeighborsUpUntilN::new(&numbers, 1))
         .operator(NeighborsUpUntilN::new(&numbers, 3))
-        .selector(SequentialSelector::default())
+        .selector(SequentialSelector::new(2))
         .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
 
@@ -76,7 +74,7 @@ fn vns_multiple_operators2() {
     let vns = VariableNeighborhoodSearch::builder()
         .operator(NeighborsUpUntilN::new(&numbers, 1))
         .operator(NeighborsUpUntilN::new(&numbers, 4))
-        .selector(SequentialSelector::default())
+        .selector(SequentialSelector::new(2))
         .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .build();
 
@@ -99,7 +97,7 @@ fn sa_single_operator() {
     let sa = SimulatedAnnealing::builder()
         .operator(NeighborSwap::new(&numbers))
         .selector(RandomSelector::new(rng.clone(), 1))
-        .criterium(Terminator::builder().iterations(n_iterations_max).build())
+        .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .rng(rng)
         .temperature(temperature)
         .build();

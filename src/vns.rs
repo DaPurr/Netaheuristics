@@ -1,13 +1,7 @@
 //! Contains all types which are specific to _variable neighborhood search_.
-use std::{
-    cell::RefCell,
-    fmt::Debug,
-    ops::{AddAssign, SubAssign},
-};
+use std::fmt::Debug;
 
-use rand::Rng;
-
-use crate::{termination::TerminationCriteria, Evaluate, Heuristic, Operator};
+use crate::{termination::TerminationCriteria, Evaluate, Heuristic, Operator, OperatorSelector};
 
 /// Implementation of _variable neighborhood search_ according to [here](https://en.wikipedia.org/wiki/Variable_neighborhood_search).
 pub struct VariableNeighborhoodSearch<Solution, Selector: OperatorSelector> {
@@ -15,19 +9,6 @@ pub struct VariableNeighborhoodSearch<Solution, Selector: OperatorSelector> {
     selector: Selector,
     terminator: Box<dyn TerminationCriteria<Solution>>,
     rng: Box<dyn rand::RngCore>,
-}
-
-/// Select operators consecutively.
-///
-/// Iterate through all operators, starting from the first one. When an improvement is made, the iteration is restarted from the beginning.
-pub struct SequentialSelector {
-    operator_index: RefCell<usize>,
-}
-
-/// Types implementing this trait are able to select the next operator.
-pub trait OperatorSelector {
-    fn initial_operator(&self) -> usize;
-    fn select_operator(&self, did_improve: bool) -> usize;
 }
 
 /// Builder pattern to construct a _variable neighborhood search_ heuristic.
@@ -43,61 +24,10 @@ pub trait StochasticOperator {
     fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
-pub struct RandomSelector {
-    rng: RefCell<Box<dyn rand::RngCore>>,
-    n_operators: usize,
-}
-
-impl RandomSelector {
-    pub fn new<T: rand::RngCore + 'static>(rng: T, n_operators: usize) -> Self {
-        Self {
-            rng: RefCell::new(Box::new(rng)),
-            n_operators,
-        }
-    }
-}
-
-impl OperatorSelector for RandomSelector {
-    fn initial_operator(&self) -> usize {
-        self.select_operator(false)
-    }
-
-    fn select_operator(&self, _did_improve: bool) -> usize {
-        self.rng.borrow_mut().gen_range(0..self.n_operators)
-    }
-}
-
 impl<Solution> StochasticOperator for dyn Operator<Solution = Solution> {
     type Solution = Solution;
     fn shake(&self, solution: Self::Solution, _rng: &mut dyn rand::RngCore) -> Self::Solution {
         solution
-    }
-}
-
-impl Default for SequentialSelector {
-    fn default() -> Self {
-        Self {
-            operator_index: RefCell::new(0),
-        }
-    }
-}
-
-impl OperatorSelector for SequentialSelector {
-    /// Choose the first operator initially.
-    fn initial_operator(&self) -> usize {
-        0
-    }
-
-    /// Select the next operator, as initially specified by the user.
-    fn select_operator(&self, did_improve: bool) -> usize {
-        if did_improve {
-            let k = *self.operator_index.borrow();
-            self.operator_index.borrow_mut().sub_assign(k);
-        } else {
-            self.operator_index.borrow_mut().add_assign(1);
-        }
-
-        *self.operator_index.borrow()
     }
 }
 
