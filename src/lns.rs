@@ -1,4 +1,6 @@
-use crate::{termination::TerminationCriteria, Evaluate, Heuristic, OperatorSelector};
+use std::cell::RefCell;
+
+use crate::{termination::TerminationCriteria, Evaluate, ImprovingHeuristic, OperatorSelector};
 
 pub struct LargeNeighborhoodSearch<Solution> {
     destroyers: Vec<Box<dyn Destroyer<Solution = Solution>>>,
@@ -6,7 +8,7 @@ pub struct LargeNeighborhoodSearch<Solution> {
     selector_destroyer: Box<dyn OperatorSelector>,
     selector_repairer: Box<dyn OperatorSelector>,
     terminator: Box<dyn TerminationCriteria<Solution>>,
-    rng: Box<dyn rand::RngCore>,
+    rng: RefCell<Box<dyn rand::RngCore>>,
 }
 
 pub trait Destroyer {
@@ -53,7 +55,7 @@ impl<Solution> LNSBuilder<Solution> {
                 .selector_repairer
                 .expect("No repairer selector specified"),
             terminator: self.terminator.expect("No termination criteria specified"),
-            rng: self.rng.expect("No RNG source specified"),
+            rng: RefCell::new(self.rng.expect("No RNG source specified")),
         }
     }
 
@@ -88,36 +90,71 @@ impl<Solution> LNSBuilder<Solution> {
     }
 }
 
-impl<Solution: Clone + Evaluate> Heuristic<Solution> for LargeNeighborhoodSearch<Solution> {
-    fn optimize(mut self, solution: Solution) -> Solution {
-        let mut best_solution = solution.clone();
-        let mut incumbent = solution.clone();
-        let mut destroyer_index = self.selector_destroyer.select(&incumbent);
-        let mut repairer_index = self.selector_repairer.select(&incumbent);
-        loop {
-            let destroyer = self.destroyers[destroyer_index].as_ref();
-            let repairer = self.repairers[repairer_index].as_ref();
+// impl<Solution> Heuristic<Solution> for LargeNeighborhoodSearch<Solution> {
+//     fn optimize(self, solution: Solution) -> Solution
+//     where
+//         Solution: Clone + Evaluate,
+//     {
+//         let mut best_solution = solution.clone();
+//         let mut incumbent = solution.clone();
+//         let mut destroyer_index = self.selector_destroyer.select(&incumbent);
+//         let mut repairer_index = self.selector_repairer.select(&incumbent);
+//         loop {
+//             let destroyer = self.destroyers[destroyer_index].as_ref();
+//             let repairer = self.repairers[repairer_index].as_ref();
 
-            let destroyed = destroyer.destroy(incumbent.clone(), &mut self.rng);
-            let repaired = repairer.repair(destroyed, &mut self.rng);
+//             let destroyed = destroyer.destroy(incumbent.clone(), self.rng.borrow_mut().as_mut());
+//             let repaired = repairer.repair(destroyed, self.rng.borrow_mut().as_mut());
 
-            let objective_repaired = repaired.evaluate();
-            if objective_repaired < best_solution.evaluate() {
-                incumbent = repaired.clone();
-                best_solution = repaired;
-            } else if objective_repaired < incumbent.evaluate() {
-                incumbent = repaired;
-            }
+//             let objective_repaired = repaired.evaluate();
+//             if objective_repaired < best_solution.evaluate() {
+//                 incumbent = repaired.clone();
+//                 best_solution = repaired;
+//             } else if objective_repaired < incumbent.evaluate() {
+//                 incumbent = repaired;
+//             }
 
-            if self.terminator.terminate(&incumbent) {
-                break;
-            }
+//             if self.terminator.terminate(&incumbent) {
+//                 break;
+//             }
 
-            destroyer_index = self.selector_destroyer.select(&incumbent);
-            repairer_index = self.selector_repairer.select(&incumbent);
+//             destroyer_index = self.selector_destroyer.select(&incumbent);
+//             repairer_index = self.selector_repairer.select(&incumbent);
+//         }
+
+//         best_solution
+//     }
+// }
+
+impl<Solution> ImprovingHeuristic<Solution> for LargeNeighborhoodSearch<Solution> {
+    fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool
+    where
+        Solution: Evaluate,
+    {
+        if candidate.evaluate() < incumbent.evaluate() {
+            true
+        } else {
+            false
         }
+    }
 
-        best_solution
+    fn propose_candidate(&self, incumbent: Solution) -> Solution
+    where
+        Solution: Evaluate,
+    {
+        let destroyer_index = self.selector_destroyer.select(&incumbent);
+        let repairer_index = self.selector_repairer.select(&incumbent);
+        let destroyer = self.destroyers[destroyer_index].as_ref();
+        let repairer = self.repairers[repairer_index].as_ref();
+
+        let destroyed = destroyer.destroy(incumbent, self.rng.borrow_mut().as_mut());
+        let repaired = repairer.repair(destroyed, self.rng.borrow_mut().as_mut());
+
+        repaired
+    }
+
+    fn should_terminate(&self, incumbent: &Solution) -> bool {
+        self.terminator.terminate(&incumbent)
     }
 }
 

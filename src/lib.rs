@@ -62,9 +62,12 @@ pub trait StochasticOperator {
 }
 
 pub trait Heuristic<Solution> {
-    fn optimize(self, solution: Solution) -> Solution;
+    fn optimize(self, solution: Solution) -> Solution
+    where
+        Solution: Clone + Evaluate;
     fn optimize_timed(self, solution: Solution) -> Outcome<Solution>
     where
+        Solution: Clone + Evaluate,
         Self: Sized,
     {
         let now = SystemTime::now();
@@ -100,9 +103,13 @@ pub struct Outcome<T> {
 }
 
 pub trait ImprovingHeuristic<Solution> {
-    fn propose_candidate(&self, solution: Solution) -> Solution;
-    fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool;
-    fn should_terminate(&self) -> bool;
+    fn propose_candidate(&self, incumbent: Solution) -> Solution
+    where
+        Solution: Evaluate;
+    fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool
+    where
+        Solution: Evaluate;
+    fn should_terminate(&self, incumbent: &Solution) -> bool;
     fn optimize(self, initial: Solution) -> Solution
     where
         Solution: Clone + Evaluate,
@@ -118,11 +125,23 @@ pub trait ImprovingHeuristic<Solution> {
                     best_solution = incumbent.clone();
                 }
             }
-            if self.should_terminate() {
+            if self.should_terminate(&incumbent) {
                 break;
             }
         }
         best_solution
+    }
+
+    fn optimize_timed(self, solution: Solution) -> Outcome<Solution>
+    where
+        Solution: Clone + Evaluate,
+        Self: Sized,
+    {
+        let now = SystemTime::now();
+        let solution = self.optimize(solution);
+        let duration = now.elapsed().expect("failed to time for duration");
+        let outcome = Outcome { duration, solution };
+        outcome
     }
 }
 

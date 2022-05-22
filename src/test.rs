@@ -2,7 +2,7 @@ use rand::{Rng, SeedableRng};
 
 use crate::{
     sa::SimulatedAnnealing, termination::Terminator, vns::VariableNeighborhoodSearch, Evaluate,
-    Heuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
+    ImprovingHeuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
 };
 
 #[test]

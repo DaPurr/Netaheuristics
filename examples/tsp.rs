@@ -5,13 +5,13 @@ use heuristics::{
     sa::SimulatedAnnealing,
     termination::Terminator,
     vns::VariableNeighborhoodSearch,
-    Evaluate, Heuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
+    Evaluate, ImprovingHeuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
 };
 use rand::{Rng, RngCore, SeedableRng};
 
 fn main() {
     // init
-    let n = 100;
+    let n = 10;
     let width = 100.;
     let height = 100.;
 
