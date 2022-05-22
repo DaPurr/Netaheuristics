@@ -1,4 +1,4 @@
-//! Contains all types which are specific to _variable neighborhood search_.
+//! Contains all types relevant to _variable neighborhood search_.
 use crate::{
     termination::TerminationCriteria, Evaluate, ImprovingHeuristic, Operator, OperatorSelector,
 };
@@ -17,21 +17,6 @@ pub struct VNSBuilder<Solution, Selector> {
     selector: Option<Selector>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
-}
-
-pub trait StochasticOperator {
-    type Solution;
-    fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
-}
-
-impl<Solution> StochasticOperator for dyn Operator<Solution = Solution>
-where
-    Solution: Clone,
-{
-    type Solution = Solution;
-    fn shake(&self, solution: Self::Solution, _rng: &mut dyn rand::RngCore) -> Self::Solution {
-        solution.clone()
-    }
 }
 
 impl<'a, Solution, Selector: OperatorSelector> VNSBuilder<Solution, Selector> {
@@ -84,57 +69,12 @@ impl<'a, Solution, Selector: OperatorSelector> VariableNeighborhoodSearch<Soluti
     }
 }
 
-// impl<Solution: Evaluate + Clone + Debug, Selector: OperatorSelector> Heuristic<Solution>
-//     for VariableNeighborhoodSearch<Solution, Selector>
-// {
-//     /// Implementation of the _variable neighborhood search_ routine.
-//     ///
-//     /// Starting with an initial solution, the following steps are repeated as long as the termination criteria say so:
-//     /// 1. Shake the incumbent with respect to the chosen operator (starting with the initial one);
-//     /// 2. Select the best solution in the neighborhood;
-//     /// 3. Update the incumbent, if necessary;
-//     /// 4. Select the next operator;
-//     /// 5. Evaluate the termination criteria.
-//     fn optimize(mut self, initial_solution: Solution) -> Solution {
-//         // init
-//         let mut incumbent = initial_solution;
-//         let terminator = self.terminator;
-//         let selector = self.selector;
-//         let mut operator_index = selector.select(&incumbent);
-//         let ref mut rng = self.rng;
-
-//         loop {
-//             // init
-//             let ref operator = self.operators[operator_index];
-
-//             let shaken = operator.shake(incumbent.clone(), rng);
-//             let best_neighbor = operator.find_best_neighbor(shaken);
-//             if best_neighbor.evaluate() < incumbent.evaluate() {
-//                 incumbent = best_neighbor;
-//             }
-
-//             // select operator
-//             operator_index = selector.select(&incumbent);
-//             // check if operator index is valid
-//             if operator_index >= self.operators.len() {
-//                 break;
-//             }
-
-//             // test termination criteria
-//             if terminator.terminate(&incumbent) {
-//                 break;
-//             }
-//         }
-
-//         incumbent
-//     }
-// }
-
 impl<Solution, Selector> ImprovingHeuristic<Solution>
     for VariableNeighborhoodSearch<Solution, Selector>
 where
     Selector: OperatorSelector,
 {
+    /// Accept iff candidate is better than the incumbent.
     fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool
     where
         Solution: Evaluate,
@@ -142,6 +82,7 @@ where
         return candidate.evaluate() < incumbent.evaluate();
     }
 
+    /// Select operator and get the best neighbor if ```solution```.
     fn propose_candidate(&self, solution: Solution) -> Solution
     where
         Solution: Evaluate,
@@ -151,6 +92,7 @@ where
         operator.find_best_neighbor(solution)
     }
 
+    /// Test whether the termination criteria are fulfilled.
     fn should_terminate(&self, incumbent: &Solution) -> bool {
         self.terminator.terminate(incumbent)
     }

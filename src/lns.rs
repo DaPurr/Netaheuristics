@@ -1,7 +1,9 @@
+//! Contains all types relevant to _large neighborhood search_
 use std::cell::RefCell;
 
 use crate::{termination::TerminationCriteria, Evaluate, ImprovingHeuristic, OperatorSelector};
 
+/// Large Neighborhood Search implementation.
 pub struct LargeNeighborhoodSearch<Solution> {
     destroyers: Vec<Box<dyn Destroyer<Solution = Solution>>>,
     repairers: Vec<Box<dyn Repairer<Solution = Solution>>>,
@@ -11,16 +13,19 @@ pub struct LargeNeighborhoodSearch<Solution> {
     rng: RefCell<Box<dyn rand::RngCore>>,
 }
 
+/// Trait to model a destroy function.
 pub trait Destroyer {
     type Solution;
     fn destroy(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
+/// Trait to model a repair function.
 pub trait Repairer {
     type Solution;
     fn repair(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
+/// Builder design pattern for [LargeNeighborhoodSearch].
 pub struct LNSBuilder<Solution> {
     destroyers: Vec<Box<dyn Destroyer<Solution = Solution>>>,
     repairers: Vec<Box<dyn Repairer<Solution = Solution>>>,
@@ -90,43 +95,8 @@ impl<Solution> LNSBuilder<Solution> {
     }
 }
 
-// impl<Solution> Heuristic<Solution> for LargeNeighborhoodSearch<Solution> {
-//     fn optimize(self, solution: Solution) -> Solution
-//     where
-//         Solution: Clone + Evaluate,
-//     {
-//         let mut best_solution = solution.clone();
-//         let mut incumbent = solution.clone();
-//         let mut destroyer_index = self.selector_destroyer.select(&incumbent);
-//         let mut repairer_index = self.selector_repairer.select(&incumbent);
-//         loop {
-//             let destroyer = self.destroyers[destroyer_index].as_ref();
-//             let repairer = self.repairers[repairer_index].as_ref();
-
-//             let destroyed = destroyer.destroy(incumbent.clone(), self.rng.borrow_mut().as_mut());
-//             let repaired = repairer.repair(destroyed, self.rng.borrow_mut().as_mut());
-
-//             let objective_repaired = repaired.evaluate();
-//             if objective_repaired < best_solution.evaluate() {
-//                 incumbent = repaired.clone();
-//                 best_solution = repaired;
-//             } else if objective_repaired < incumbent.evaluate() {
-//                 incumbent = repaired;
-//             }
-
-//             if self.terminator.terminate(&incumbent) {
-//                 break;
-//             }
-
-//             destroyer_index = self.selector_destroyer.select(&incumbent);
-//             repairer_index = self.selector_repairer.select(&incumbent);
-//         }
-
-//         best_solution
-//     }
-// }
-
 impl<Solution> ImprovingHeuristic<Solution> for LargeNeighborhoodSearch<Solution> {
+    /// Accept a candidate iff it is an improvement.
     fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool
     where
         Solution: Evaluate,
@@ -138,6 +108,7 @@ impl<Solution> ImprovingHeuristic<Solution> for LargeNeighborhoodSearch<Solution
         }
     }
 
+    /// Select a destroy and repair method, then return the destroyed and repaired ```incumbent```.
     fn propose_candidate(&self, incumbent: Solution) -> Solution
     where
         Solution: Evaluate,
@@ -153,9 +124,8 @@ impl<Solution> ImprovingHeuristic<Solution> for LargeNeighborhoodSearch<Solution
         repaired
     }
 
+    /// Terminate iff the termination criteria are satisfied.
     fn should_terminate(&self, incumbent: &Solution) -> bool {
         self.terminator.terminate(&incumbent)
     }
 }
-
-// todo: fix randomness bug in LNS(?) TSP example shows different objective values, although seed is constant

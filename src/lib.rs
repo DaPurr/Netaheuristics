@@ -30,10 +30,10 @@ pub trait Evaluate {
     fn evaluate(&self) -> f32;
 }
 
-/// An local search operator returns the neighborhood of its argument.
+/// A local search operator returns the neighborhood of its argument.
 pub trait Operator {
     type Solution: Evaluate;
-    /// Construct the neighborhood ```solution```.
+    /// Construct the neighborhood of ```solution```.
     fn construct_neighborhood(
         &self,
         solution: Self::Solution,
@@ -55,57 +55,66 @@ pub trait Operator {
     }
 }
 
+/// A stochastic local search operator.
+///
+/// An operator of this type does not return a neighborhood, but instead a single randomly drawn neighbor.
 pub trait StochasticOperator {
     type Solution;
     /// Return a random neighbor of ```solution```, with respect to the neighborhood induced by this operator, using ```rng``` as source of randomness.
     fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
-pub trait Heuristic<Solution> {
-    fn optimize(self, solution: Solution) -> Solution
-    where
-        Solution: Clone + Evaluate;
-    fn optimize_timed(self, solution: Solution) -> Outcome<Solution>
-    where
-        Solution: Clone + Evaluate,
-        Self: Sized,
-    {
-        let now = SystemTime::now();
-        let solution = self.optimize(solution);
-        let duration = now.elapsed().expect("failed to time for duration");
-        let outcome = Outcome { duration, solution };
-        outcome
-    }
-}
-
-/// Types implementing this trait are able to select the next operator.
+/// Give the next operator based on certain rules.
 pub trait OperatorSelector {
     fn select(&self, solution: &dyn Evaluate) -> usize;
 }
 
-/// Select operators consecutively.
+/// Select operators in a consecutive manner.
 ///
-/// Iterate through all operators, starting from the first one. When an improvement is made, the iteration is restarted from the beginning.
+/// Iterate through all operators, consecutively, starting from the first one. When an improvement is made, the iteration is restarted from the beginning.
 pub struct SequentialSelector {
     operator_index: RefCell<usize>,
     n_operators: usize,
     objective_best: RefCell<f32>,
 }
 
+/// Select the next operator uniformly at random.
 pub struct RandomSelector {
     rng: RefCell<Box<dyn rand::RngCore>>,
     n_operators: usize,
 }
 
+/// Solution decorated with some metadata.
+///
+/// Currently, only the computation time is added to the solution.
 pub struct Outcome<T> {
     solution: T,
     duration: std::time::Duration,
 }
 
+/// Model of an improvement heuristic based on iterations.
+///
+/// Models heuristics in the form of:
+/// 1. incumbent = initial
+/// 2. candidate = ```propose_candidate```(incumbent
+/// 3. if ```accept_candidate```(candidate, incumbent)
+///     - incumbent = candidate
+///     - if incumbent.evaluate() < best_solution.evaluate()
+///         - best_solution = incumbent
+/// 4. if ```should_terminate```(incumbent)
+///     - return best_solution
+/// 5. else go back to (2)
 pub trait ImprovingHeuristic<Solution> {
+    /// Propose a candidate solution given the incumbent.
+    ///
+    /// In a local search algorithm, the incumbent's neighborhood is searched.
     fn propose_candidate(&self, incumbent: Solution) -> Solution
     where
         Solution: Evaluate;
+    /// Test whether the current candidate is accepted as the next incumbent.
+    ///
+    /// Usually with local search this tests whether the candidate is better than the incumbent.
+    /// With simulated annealing, however, acceptance is based on probability.
     fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool
     where
         Solution: Evaluate;
@@ -132,6 +141,7 @@ pub trait ImprovingHeuristic<Solution> {
         best_solution
     }
 
+    /// Runs the [optimize] function and returns an [Outcome], decorated with computation time.
     fn optimize_timed(self, solution: Solution) -> Outcome<Solution>
     where
         Solution: Clone + Evaluate,
@@ -146,10 +156,12 @@ pub trait ImprovingHeuristic<Solution> {
 }
 
 impl<T> Outcome<T> {
+    /// Get the solution which is decorated.
     pub fn solution(&self) -> &T {
         &self.solution
     }
 
+    /// Return the computation time that was needed to get this solution.
     pub fn duration(&self) -> Duration {
         self.duration
     }
@@ -181,7 +193,6 @@ impl SequentialSelector {
 }
 
 impl OperatorSelector for SequentialSelector {
-    /// Select the next operator, as initially specified by the user.
     fn select(&self, solution: &dyn Evaluate) -> usize {
         let objective = solution.evaluate();
         let k = *self.operator_index.borrow();
@@ -195,5 +206,3 @@ impl OperatorSelector for SequentialSelector {
         *self.operator_index.borrow()
     }
 }
-
-// todo: embed cached solution into algorithms

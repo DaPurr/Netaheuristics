@@ -1,3 +1,4 @@
+//! Contains all types relevant to _simulated annealing_.
 use std::cell::RefCell;
 
 use crate::{
@@ -7,6 +8,7 @@ use crate::{
 
 use rand::Rng;
 
+/// Simulated Annealing implementation.
 pub struct SimulatedAnnealing<Solution> {
     operators: Vec<Box<dyn StochasticOperator<Solution = Solution>>>,
     selector: Box<dyn OperatorSelector>,
@@ -15,6 +17,7 @@ pub struct SimulatedAnnealing<Solution> {
     temperature: f32,
 }
 
+/// Builder design pattern for [SimulatedAnnealing].
 pub struct SABuilder<Solution> {
     selector: Option<Box<dyn OperatorSelector>>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
@@ -77,43 +80,10 @@ impl<Solution> SABuilder<Solution> {
     }
 }
 
-// impl<Solution> Heuristic<Solution> for SimulatedAnnealing<Solution> {
-//     fn optimize(self, solution: Solution) -> Solution
-//     where
-//         Solution: Clone + Evaluate,
-//     {
-//         // init
-//         let mut incumbent = solution;
-//         let mut best_solution = incumbent.clone();
-//         let mut operator_index = self.selector.select(&incumbent);
-//         let mut operator = self.operators[operator_index].as_ref();
-
-//         loop {
-//             let r: f32 = self.rng.borrow_mut().gen();
-
-//             let candidate = operator.shake(incumbent.clone(), self.rng.borrow_mut().as_mut());
-//             if candidate.evaluate() < best_solution.evaluate() {
-//                 incumbent = candidate.clone();
-//                 best_solution = candidate.clone();
-//             } else if r
-//                 <= compute_probability(self.temperature, incumbent.evaluate(), candidate.evaluate())
-//             {
-//                 incumbent = candidate.clone();
-//             }
-
-//             operator_index = self.selector.select(&incumbent);
-//             operator = self.operators[operator_index].as_ref();
-
-//             if self.terminator.terminate(&candidate) {
-//                 break;
-//             }
-//         }
-
-//         best_solution
-//     }
-// }
-
 impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
+    /// Accept iff the ```candidate``` is better than the ```incumbent```, or otherwise with a probabilty equal to the acceptance probability.
+    ///
+    /// The acceptance probability is calculated as exp(-delta / Temperature).
     fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool
     where
         Solution: Evaluate,
@@ -130,6 +100,7 @@ impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
         }
     }
 
+    /// Select an operator and draw a random neighbor.
     fn propose_candidate(&self, incumbent: Solution) -> Solution
     where
         Solution: Evaluate,
@@ -139,6 +110,7 @@ impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
         operator.shake(incumbent, self.rng.borrow_mut().as_mut())
     }
 
+    /// Test whether the termination criteria are fulfilled.
     fn should_terminate(&self, incumbent: &Solution) -> bool {
         self.terminator.terminate(&incumbent)
     }

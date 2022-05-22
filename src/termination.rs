@@ -43,6 +43,7 @@ pub struct TerminatorBuilder<Solution> {
     aggregator: AggregateTermination,
 }
 
+/// Dummy struct just to obtain a builder for TerminationCriteria.
 pub struct Terminator;
 
 impl Terminator {
