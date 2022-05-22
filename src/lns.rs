@@ -6,16 +6,17 @@ pub struct LargeNeighborhoodSearch<Solution> {
     selector_destroyer: Box<dyn OperatorSelector>,
     selector_repairer: Box<dyn OperatorSelector>,
     terminator: Box<dyn TerminationCriteria<Solution>>,
+    rng: Box<dyn rand::RngCore>,
 }
 
 pub trait Destroyer {
     type Solution;
-    fn destroy(&self, solution: Self::Solution) -> Self::Solution;
+    fn destroy(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
 pub trait Repairer {
     type Solution;
-    fn repair(&self, solution: Self::Solution) -> Self::Solution;
+    fn repair(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
 pub struct LNSBuilder<Solution> {
@@ -24,6 +25,7 @@ pub struct LNSBuilder<Solution> {
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
     selector_destroyer: Option<Box<dyn OperatorSelector>>,
     selector_repairer: Option<Box<dyn OperatorSelector>>,
+    rng: Option<Box<dyn rand::RngCore>>,
 }
 
 impl<Solution> LargeNeighborhoodSearch<Solution> {
@@ -34,6 +36,7 @@ impl<Solution> LargeNeighborhoodSearch<Solution> {
             terminator: None,
             selector_destroyer: None,
             selector_repairer: None,
+            rng: None,
         }
     }
 }
@@ -50,6 +53,7 @@ impl<Solution> LNSBuilder<Solution> {
                 .selector_repairer
                 .expect("No repairer selector specified"),
             terminator: self.terminator.expect("No termination criteria specified"),
+            rng: self.rng.expect("No RNG source specified"),
         }
     }
 
@@ -77,11 +81,16 @@ impl<Solution> LNSBuilder<Solution> {
         self.selector_repairer = Some(Box::new(repairer));
         self
     }
+
+    pub fn rng<T: rand::RngCore + 'static>(mut self, rng: T) -> Self {
+        self.rng = Some(Box::new(rng));
+        self
+    }
 }
 
 impl<Solution: Clone + Evaluate> Heuristic for LargeNeighborhoodSearch<Solution> {
     type Solution = Solution;
-    fn optimize(self, solution: Solution) -> Solution {
+    fn optimize(mut self, solution: Solution) -> Solution {
         let mut best_solution = solution.clone();
         let mut incumbent = solution.clone();
         let mut destroyer_index = self.selector_destroyer.select(&incumbent);
@@ -90,8 +99,8 @@ impl<Solution: Clone + Evaluate> Heuristic for LargeNeighborhoodSearch<Solution>
             let destroyer = self.destroyers[destroyer_index].as_ref();
             let repairer = self.repairers[repairer_index].as_ref();
 
-            let destroyed = destroyer.destroy(incumbent.clone());
-            let repaired = repairer.repair(destroyed);
+            let destroyed = destroyer.destroy(incumbent.clone(), &mut self.rng);
+            let repaired = repairer.repair(destroyed, &mut self.rng);
 
             if repaired.evaluate() < best_solution.evaluate() {
                 incumbent = repaired.clone();
@@ -111,3 +120,5 @@ impl<Solution: Clone + Evaluate> Heuristic for LargeNeighborhoodSearch<Solution>
         best_solution
     }
 }
+
+// todo: fix randomness bug in LNS(?) TSP example shows different objective values, although seed is constant
