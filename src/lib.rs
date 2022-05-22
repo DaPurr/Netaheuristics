@@ -82,6 +82,32 @@ pub struct RandomSelector {
     n_operators: usize,
 }
 
+pub struct CachedSolution {
+    objective: RefCell<Option<f32>>,
+    inner: Box<dyn Evaluate>,
+}
+
+impl CachedSolution {
+    pub fn new<T: Evaluate + 'static>(solution: T) -> Self {
+        Self {
+            objective: RefCell::new(None),
+            inner: Box::new(solution),
+        }
+    }
+}
+
+impl Evaluate for CachedSolution {
+    fn evaluate(&self) -> f32 {
+        if let Some(x) = *self.objective.borrow() {
+            x
+        } else {
+            let objective = self.inner.evaluate();
+            self.objective.replace(Some(objective));
+            objective
+        }
+    }
+}
+
 impl RandomSelector {
     pub fn new<T: rand::RngCore + 'static>(rng: T, n_operators: usize) -> Self {
         Self {
