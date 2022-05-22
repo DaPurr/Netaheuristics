@@ -74,9 +74,8 @@ impl<Solution> SABuilder<Solution> {
     }
 }
 
-impl<Solution: Evaluate + Clone> Heuristic for SimulatedAnnealing<Solution> {
-    type Solution = Solution;
-    fn optimize(mut self, solution: Self::Solution) -> Self::Solution {
+impl<Solution: Evaluate + Clone> Heuristic<Solution> for SimulatedAnnealing<Solution> {
+    fn optimize(mut self, solution: Solution) -> Solution {
         // init
         let mut incumbent = solution;
         let mut best_solution = incumbent.clone();

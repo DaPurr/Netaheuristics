@@ -88,8 +88,7 @@ impl<Solution> LNSBuilder<Solution> {
     }
 }
 
-impl<Solution: Clone + Evaluate> Heuristic for LargeNeighborhoodSearch<Solution> {
-    type Solution = Solution;
+impl<Solution: Clone + Evaluate> Heuristic<Solution> for LargeNeighborhoodSearch<Solution> {
     fn optimize(mut self, solution: Solution) -> Solution {
         let mut best_solution = solution.clone();
         let mut incumbent = solution.clone();
@@ -102,10 +101,11 @@ impl<Solution: Clone + Evaluate> Heuristic for LargeNeighborhoodSearch<Solution>
             let destroyed = destroyer.destroy(incumbent.clone(), &mut self.rng);
             let repaired = repairer.repair(destroyed, &mut self.rng);
 
-            if repaired.evaluate() < best_solution.evaluate() {
+            let objective_repaired = repaired.evaluate();
+            if objective_repaired < best_solution.evaluate() {
                 incumbent = repaired.clone();
                 best_solution = repaired;
-            } else if repaired.evaluate() < incumbent.evaluate() {
+            } else if objective_repaired < incumbent.evaluate() {
                 incumbent = repaired;
             }
 

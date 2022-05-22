@@ -24,10 +24,13 @@ pub trait StochasticOperator {
     fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
-impl<Solution> StochasticOperator for dyn Operator<Solution = Solution> {
+impl<Solution> StochasticOperator for dyn Operator<Solution = Solution>
+where
+    Solution: Clone,
+{
     type Solution = Solution;
     fn shake(&self, solution: Self::Solution, _rng: &mut dyn rand::RngCore) -> Self::Solution {
-        solution
+        solution.clone()
     }
 }
 
@@ -83,7 +86,7 @@ impl<'a, Solution, Selector: OperatorSelector> VariableNeighborhoodSearch<Soluti
     }
 }
 
-impl<Solution: Evaluate + Clone + Debug, Selector: OperatorSelector> Heuristic
+impl<Solution: Evaluate + Clone + Debug, Selector: OperatorSelector> Heuristic<Solution>
     for VariableNeighborhoodSearch<Solution, Selector>
 {
     /// Implementation of the _variable neighborhood search_ routine.
@@ -94,8 +97,7 @@ impl<Solution: Evaluate + Clone + Debug, Selector: OperatorSelector> Heuristic
     /// 3. Update the incumbent, if necessary;
     /// 4. Select the next operator;
     /// 5. Evaluate the termination criteria.
-    type Solution = Solution;
-    fn optimize(mut self, initial_solution: Self::Solution) -> Self::Solution {
+    fn optimize(mut self, initial_solution: Solution) -> Solution {
         // init
         let mut incumbent = initial_solution;
         let terminator = self.terminator;

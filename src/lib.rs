@@ -61,10 +61,9 @@ pub trait StochasticOperator {
     fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
 }
 
-pub trait Heuristic {
-    type Solution: Evaluate;
-    fn optimize(self, solution: Self::Solution) -> Self::Solution;
-    fn optimize_timed(self, solution: Self::Solution) -> Outcome<Self::Solution>
+pub trait Heuristic<Solution> {
+    fn optimize(self, solution: Solution) -> Solution;
+    fn optimize_timed(self, solution: Solution) -> Outcome<Solution>
     where
         Self: Sized,
     {
@@ -95,14 +94,36 @@ pub struct RandomSelector {
     n_operators: usize,
 }
 
-pub struct CachedSolution {
-    objective: RefCell<Option<f32>>,
-    inner: Box<dyn Evaluate>,
-}
-
 pub struct Outcome<T> {
     solution: T,
     duration: std::time::Duration,
+}
+
+pub trait ImprovingHeuristic<Solution> {
+    fn propose_candidate(&self, solution: Solution) -> Solution;
+    fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool;
+    fn should_terminate(&self) -> bool;
+    fn optimize(self, initial: Solution) -> Solution
+    where
+        Solution: Clone + Evaluate,
+        Self: Sized,
+    {
+        let mut incumbent = initial;
+        let mut best_solution = incumbent.clone();
+        loop {
+            let candidate = self.propose_candidate(incumbent.clone());
+            if self.accept_candidate(&candidate, &incumbent) {
+                incumbent = candidate;
+                if incumbent.evaluate() < best_solution.evaluate() {
+                    best_solution = incumbent.clone();
+                }
+            }
+            if self.should_terminate() {
+                break;
+            }
+        }
+        best_solution
+    }
 }
 
 impl<T> Outcome<T> {
@@ -112,27 +133,6 @@ impl<T> Outcome<T> {
 
     pub fn duration(&self) -> Duration {
         self.duration
-    }
-}
-
-impl CachedSolution {
-    pub fn new<T: Evaluate + 'static>(solution: T) -> Self {
-        Self {
-            objective: RefCell::new(None),
-            inner: Box::new(solution),
-        }
-    }
-}
-
-impl Evaluate for CachedSolution {
-    fn evaluate(&self) -> f32 {
-        if let Some(x) = *self.objective.borrow() {
-            x
-        } else {
-            let objective = self.inner.evaluate();
-            self.objective.replace(Some(objective));
-            objective
-        }
     }
 }
 
@@ -176,3 +176,5 @@ impl OperatorSelector for SequentialSelector {
         *self.operator_index.borrow()
     }
 }
+
+// todo: embed cached solution into algorithms
