@@ -97,26 +97,24 @@ impl<Solution: Evaluate + Clone + Debug, Selector: OperatorSelector> Heuristic
     type Solution = Solution;
     fn optimize(mut self, initial_solution: Self::Solution) -> Self::Solution {
         // init
+        let mut incumbent = initial_solution;
         let terminator = self.terminator;
         let selector = self.selector;
-        let mut operator_index = selector.initial_operator();
-        let mut incumbent = initial_solution;
+        let mut operator_index = selector.select(&incumbent);
         let ref mut rng = self.rng;
 
         loop {
             // init
-            let mut did_improve = false;
             let ref operator = self.operators[operator_index];
 
             let shaken = operator.shake(incumbent.clone(), rng);
             let best_neighbor = operator.find_best_neighbor(shaken);
             if best_neighbor.evaluate() < incumbent.evaluate() {
                 incumbent = best_neighbor;
-                did_improve = true;
             }
 
             // select operator
-            operator_index = selector.select_operator(did_improve);
+            operator_index = selector.select(&incumbent);
             // check if operator index is valid
             if operator_index >= self.operators.len() {
                 break;

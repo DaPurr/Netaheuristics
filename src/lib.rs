@@ -11,10 +11,7 @@
 //!
 //! and their adaptive variants.
 
-use std::{
-    cell::RefCell,
-    ops::{AddAssign, SubAssign},
-};
+use std::{cell::RefCell, ops::SubAssign};
 
 use rand::Rng;
 
@@ -68,8 +65,7 @@ pub trait Heuristic {
 
 /// Types implementing this trait are able to select the next operator.
 pub trait OperatorSelector {
-    fn initial_operator(&self) -> usize;
-    fn select_operator(&self, did_improve: bool) -> usize;
+    fn select(&self, solution: &dyn Evaluate) -> usize;
 }
 
 /// Select operators consecutively.
@@ -78,6 +74,7 @@ pub trait OperatorSelector {
 pub struct SequentialSelector {
     operator_index: RefCell<usize>,
     n_operators: usize,
+    objective_best: RefCell<f32>,
 }
 
 pub struct RandomSelector {
@@ -95,11 +92,7 @@ impl RandomSelector {
 }
 
 impl OperatorSelector for RandomSelector {
-    fn initial_operator(&self) -> usize {
-        self.select_operator(false)
-    }
-
-    fn select_operator(&self, _did_improve: bool) -> usize {
+    fn select(&self, _solution: &dyn Evaluate) -> usize {
         self.rng.borrow_mut().gen_range(0..self.n_operators)
     }
 }
@@ -108,22 +101,19 @@ impl SequentialSelector {
     pub fn new(n: usize) -> Self {
         Self {
             n_operators: n,
+            objective_best: RefCell::new(std::f32::INFINITY),
             operator_index: RefCell::new(0),
         }
     }
 }
 
 impl OperatorSelector for SequentialSelector {
-    /// Choose the first operator initially.
-    fn initial_operator(&self) -> usize {
-        // todo: remove method from trait, OperatorSelectors should arrange initialization themselves
-        0
-    }
-
     /// Select the next operator, as initially specified by the user.
-    fn select_operator(&self, did_improve: bool) -> usize {
+    fn select(&self, solution: &dyn Evaluate) -> usize {
+        let objective = solution.evaluate();
         let k = *self.operator_index.borrow();
-        if did_improve {
+        if objective < *self.objective_best.borrow() {
+            self.objective_best.replace(objective);
             self.operator_index.borrow_mut().sub_assign(k);
         } else {
             self.operator_index.replace((k + 1) % self.n_operators);

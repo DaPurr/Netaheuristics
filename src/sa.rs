@@ -78,10 +78,10 @@ impl<Solution: Evaluate + Clone> Heuristic for SimulatedAnnealing<Solution> {
     type Solution = Solution;
     fn optimize(mut self, solution: Self::Solution) -> Self::Solution {
         // init
-        let mut operator = self.operators[self.selector.initial_operator()].as_ref();
         let mut incumbent = solution;
         let mut best_solution = incumbent.clone();
-        let mut did_improve = false;
+        let mut operator_index = self.selector.select(&incumbent);
+        let mut operator = self.operators[operator_index].as_ref();
 
         loop {
             let r: f32 = self.rng.gen();
@@ -90,14 +90,14 @@ impl<Solution: Evaluate + Clone> Heuristic for SimulatedAnnealing<Solution> {
             if candidate.evaluate() < best_solution.evaluate() {
                 incumbent = candidate.clone();
                 best_solution = candidate.clone();
-                did_improve = true;
             } else if r
                 <= compute_probability(self.temperature, incumbent.evaluate(), candidate.evaluate())
             {
                 incumbent = candidate.clone();
             }
 
-            operator = self.operators[self.selector.select_operator(did_improve)].as_ref();
+            operator_index = self.selector.select(&incumbent);
+            operator = self.operators[operator_index].as_ref();
 
             if self.terminator.terminate(&candidate) {
                 break;

@@ -84,10 +84,9 @@ impl<Solution: Clone + Evaluate> Heuristic for LargeNeighborhoodSearch<Solution>
     fn optimize(self, solution: Solution) -> Solution {
         let mut best_solution = solution.clone();
         let mut incumbent = solution.clone();
-        let mut destroyer_index = self.selector_destroyer.initial_operator();
-        let mut repairer_index = self.selector_repairer.initial_operator();
+        let mut destroyer_index = self.selector_destroyer.select(&incumbent);
+        let mut repairer_index = self.selector_repairer.select(&incumbent);
         loop {
-            let mut did_improve = false;
             let destroyer = self.destroyers[destroyer_index].as_ref();
             let repairer = self.repairers[repairer_index].as_ref();
 
@@ -97,18 +96,16 @@ impl<Solution: Clone + Evaluate> Heuristic for LargeNeighborhoodSearch<Solution>
             if repaired.evaluate() < best_solution.evaluate() {
                 incumbent = repaired.clone();
                 best_solution = repaired;
-                did_improve = true;
             } else if repaired.evaluate() < incumbent.evaluate() {
                 incumbent = repaired;
-                did_improve = true;
             }
 
             if self.terminator.terminate(&incumbent) {
                 break;
             }
 
-            destroyer_index = self.selector_destroyer.select_operator(did_improve); // todo: pass generated solution, rename OperatorSelector to Selector?
-            repairer_index = self.selector_repairer.select_operator(did_improve);
+            destroyer_index = self.selector_destroyer.select(&incumbent);
+            repairer_index = self.selector_repairer.select(&incumbent);
         }
 
         best_solution
