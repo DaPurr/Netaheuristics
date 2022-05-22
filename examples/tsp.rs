@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashSet, hash::Hash, rc::Rc};
+use std::{collections::HashSet, hash::Hash, time::SystemTime};
 
 use heuristics::{
     lns::{Destroyer, LargeNeighborhoodSearch, Repairer},
@@ -11,20 +11,24 @@ use rand::{Rng, RngCore, SeedableRng};
 
 fn main() {
     // init
-    let n = 10;
+    let n = 100;
     let width = 100.;
     let height = 100.;
-    let seed = 0;
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     // create random cities
+    let seed = 0;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let cities: Vec<City> = (0..n)
         .map(|id| create_random_city(id, width, height, &mut rng))
         .collect();
     let cities = Box::new(cities);
 
+    let now = SystemTime::now();
     let random_tour = construct_random_tour(&mut cities.clone().into_iter(), &mut rng);
+    let duration_random = now.elapsed().unwrap();
+    let now = SystemTime::now();
     let greedy_tour = construct_greedy_tour(&mut cities.clone().into_iter(), &mut rng);
+    let duration_greedy = now.elapsed().unwrap();
 
     // optimize with VNS
     let operator_2opt = TwoOpt::new(cities.as_slice());
@@ -36,34 +40,59 @@ fn main() {
         .operator(operator_3opt)
         .terminator(Terminator::builder().iterations(10).build())
         .build();
-    let vns_tour = vns.optimize(random_tour.clone());
+    let vns_outcome = vns.optimize_timed(random_tour.clone());
 
+    let seed = 0;
+    let rng = rand::rngs::StdRng::seed_from_u64(seed);
     let temperature = 100.;
-    let n_iterations = 10_000;
+    let n_iterations = 40_000;
     let sa = SimulatedAnnealing::builder()
         .selector(RandomSelector::new(rng.clone(), 1))
         .operator(TwoOptRandom)
         .temperature(temperature)
         .terminator(Terminator::builder().iterations(n_iterations).build())
-        .rng(rng.clone())
+        .rng(rng)
         .build();
-    let sa_tour = sa.optimize(random_tour.clone());
+    let sa_outcome = sa.optimize_timed(random_tour.clone());
 
+    let seed = 0;
+    let rng = rand::rngs::StdRng::seed_from_u64(seed);
     let n_destroyed_cities = 2;
     let lns = LargeNeighborhoodSearch::builder()
         .selector_destroyer(SequentialSelector::new(1))
         .selector_repairer(SequentialSelector::new(1))
-        .destroyer(TSPDestroyer::new(n_destroyed_cities, rng.clone()))
+        .destroyer(TSPDestroyer::new(n_destroyed_cities))
         .repairer(TSPRepairer::new(*cities))
         .terminator(Terminator::builder().iterations(10_000).build())
+        .rng(rng)
         .build();
-    let lns_tour = lns.optimize(random_tour.clone());
+    let lns_outcome = lns.optimize_timed(random_tour.clone());
 
-    println!("random tour length: {}", random_tour.evaluate());
-    println!("greedy tour length: {}", greedy_tour.evaluate());
-    println!("vns tour length: {}", vns_tour.evaluate());
-    println!("sa tour length: {}", sa_tour.evaluate());
-    println!("lns tour length: {}", lns_tour.evaluate());
+    println!(
+        "random tour length: {}, computation time: {}",
+        random_tour.evaluate(),
+        duration_random.as_nanos() as f32 * 1e-9
+    );
+    println!(
+        "greedy tour length: {}, computation time: {}",
+        greedy_tour.evaluate(),
+        duration_greedy.as_nanos() as f32 * 1e-9
+    );
+    println!(
+        "vns tour length: {}, computation time: {}",
+        vns_outcome.solution().evaluate(),
+        vns_outcome.duration().as_nanos() as f32 * 1e-9
+    );
+    println!(
+        "sa tour length: {}, computation time: {}",
+        sa_outcome.solution().evaluate(),
+        sa_outcome.duration().as_nanos() as f32 * 1e-9
+    );
+    println!(
+        "lns tour length: {}, computation time: {}",
+        lns_outcome.solution().evaluate(),
+        lns_outcome.duration().as_nanos() as f32 * 1e-9
+    );
 }
 
 #[derive(Clone, Debug)]
@@ -106,7 +135,6 @@ enum ThreeOptPermutation {
 
 struct TSPDestroyer {
     n: usize,
-    rng: Rc<RefCell<dyn rand::RngCore>>,
 }
 
 struct TSPRepairer {
@@ -120,17 +148,14 @@ impl TSPRepairer {
 }
 
 impl TSPDestroyer {
-    pub fn new<T: rand::RngCore + 'static>(n: usize, rng: T) -> Self {
-        Self {
-            n,
-            rng: Rc::new(RefCell::new(rng)),
-        }
+    pub fn new(n: usize) -> Self {
+        Self { n }
     }
 }
 
 impl Repairer for TSPRepairer {
     type Solution = Tour;
-    fn repair(&self, mut solution: Self::Solution) -> Self::Solution {
+    fn repair(&self, mut solution: Self::Solution, _rng: &mut dyn rand::RngCore) -> Self::Solution {
         let cities: HashSet<City> = self.cities.iter().map(|x| x.to_owned()).collect();
         let cities_tour: HashSet<City> = solution.cities.clone().into_iter().collect();
         let cities_missing = &cities - &cities_tour;
@@ -159,9 +184,9 @@ fn closest_city_to<'a>(city: &'a City, city_pool: &'a Vec<City>) -> usize {
 
 impl Destroyer for TSPDestroyer {
     type Solution = Tour;
-    fn destroy(&self, mut solution: Self::Solution) -> Self::Solution {
+    fn destroy(&self, mut solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution {
         for _ in 0..self.n {
-            let r = self.rng.borrow_mut().gen_range(0..solution.cities.len());
+            let r = rng.gen_range(0..solution.cities.len());
             solution.cities.remove(r);
         }
         solution

@@ -10,8 +10,11 @@
 //! - Large Neighborhood Search
 //!
 //! and their adaptive variants.
-
-use std::{cell::RefCell, ops::SubAssign};
+use std::{
+    cell::RefCell,
+    ops::SubAssign,
+    time::{Duration, SystemTime},
+};
 
 use rand::Rng;
 
@@ -61,6 +64,16 @@ pub trait StochasticOperator {
 pub trait Heuristic {
     type Solution: Evaluate;
     fn optimize(self, solution: Self::Solution) -> Self::Solution;
+    fn optimize_timed(self, solution: Self::Solution) -> Outcome<Self::Solution>
+    where
+        Self: Sized,
+    {
+        let now = SystemTime::now();
+        let solution = self.optimize(solution);
+        let duration = now.elapsed().expect("failed to time for duration");
+        let outcome = Outcome { duration, solution };
+        outcome
+    }
 }
 
 /// Types implementing this trait are able to select the next operator.
@@ -85,6 +98,21 @@ pub struct RandomSelector {
 pub struct CachedSolution {
     objective: RefCell<Option<f32>>,
     inner: Box<dyn Evaluate>,
+}
+
+pub struct Outcome<T> {
+    solution: T,
+    duration: std::time::Duration,
+}
+
+impl<T> Outcome<T> {
+    pub fn solution(&self) -> &T {
+        &self.solution
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.duration
+    }
 }
 
 impl CachedSolution {
