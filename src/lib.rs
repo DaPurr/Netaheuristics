@@ -155,6 +155,62 @@ pub trait ImprovingHeuristic<Solution> {
     }
 }
 
+pub struct SelectorAdaptive<T> {
+    options: Vec<T>,
+    weights: Vec<f32>,
+    index_last_selection: Option<usize>,
+    weight_improve_best: f32,
+    weight_accept: f32,
+    weight_reject: f32,
+}
+
+pub enum ProposalEvaluation {
+    ImprovedBest,
+    Accept,
+    Reject,
+}
+
+impl<T> SelectorAdaptive<T> {
+    pub fn default_parameters(options: Vec<T>) -> Self {
+        let n = options.len();
+        Self {
+            options,
+            weights: vec![1.; n],
+            index_last_selection: None,
+            weight_improve_best: 3.,
+            weight_accept: 1.,
+            weight_reject: 0.,
+        }
+    }
+    pub fn select(&mut self, rng: &mut dyn rand::RngCore) -> &T {
+        let denom: f32 = self.weights.iter().sum();
+        let mut sum = 0.;
+        let r = rng.gen::<f32>() * denom;
+
+        for i in 0..self.options.len() {
+            sum += self.weights[i];
+            if r <= sum {
+                self.index_last_selection = Some(i);
+                return &self.options[i];
+            }
+        }
+
+        panic!("something went wrong");
+    }
+
+    pub fn feedback(&mut self, status: ProposalEvaluation) {
+        if let Some(index) = self.index_last_selection {
+            let weight = match status {
+                ProposalEvaluation::ImprovedBest => self.weight_improve_best,
+                ProposalEvaluation::Accept => self.weight_accept,
+                ProposalEvaluation::Reject => self.weight_reject,
+            };
+
+            self.weights[index] += weight;
+        }
+    }
+}
+
 impl<T> Outcome<T> {
     /// Get the solution which is decorated.
     pub fn solution(&self) -> &T {
