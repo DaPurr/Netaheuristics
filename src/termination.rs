@@ -46,6 +46,15 @@ pub struct TerminatorBuilder<Solution> {
 /// Dummy struct just to obtain a builder for TerminationCriteria.
 pub struct Terminator;
 
+impl IterationTerminator {
+    pub fn new(iterations_max: usize) -> Self {
+        Self {
+            n: iterations_max,
+            iteration: RefCell::new(0),
+        }
+    }
+}
+
 impl Terminator {
     /// Construct a builder for termination criteria.
     pub fn builder<Solution>() -> TerminatorBuilder<Solution> {

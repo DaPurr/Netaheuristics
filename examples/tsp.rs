@@ -3,15 +3,15 @@ use std::{collections::HashSet, hash::Hash, time::SystemTime};
 use heuristics::{
     lns::{Destroyer, LargeNeighborhoodSearch, Repairer},
     sa::SimulatedAnnealing,
-    termination::Terminator,
-    vns::VariableNeighborhoodSearch,
+    termination::{IterationTerminator, Terminator},
+    vns::{AdaptiveVariableNeighborhoodSearch, VariableNeighborhoodSearch},
     Evaluate, ImprovingHeuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
 };
 use rand::{Rng, RngCore, SeedableRng};
 
 fn main() {
     // init
-    let n = 10;
+    let n = 100;
     let width = 100.;
     let height = 100.;
 
@@ -45,7 +45,7 @@ fn main() {
     let seed = 0;
     let rng = rand::rngs::StdRng::seed_from_u64(seed);
     let temperature = 100.;
-    let n_iterations = 40_000;
+    let n_iterations = 10_000;
     let sa = SimulatedAnnealing::builder()
         .selector(RandomSelector::new(rng.clone(), 1))
         .operator(TwoOptRandom)
@@ -56,17 +56,29 @@ fn main() {
     let sa_outcome = sa.optimize_timed(random_tour.clone());
 
     let seed = 0;
+    let iterations = 10_000;
     let rng = rand::rngs::StdRng::seed_from_u64(seed);
     let n_destroyed_cities = 2;
     let lns = LargeNeighborhoodSearch::builder()
         .selector_destroyer(SequentialSelector::new(1))
         .selector_repairer(SequentialSelector::new(1))
         .destroyer(TSPDestroyer::new(n_destroyed_cities))
-        .repairer(TSPRepairer::new(*cities))
-        .terminator(Terminator::builder().iterations(10_000).build())
-        .rng(rng)
+        .repairer(TSPRepairer::new(*cities.clone()))
+        .terminator(Terminator::builder().iterations(iterations).build())
+        .rng(rng.clone())
         .build();
     let lns_outcome = lns.optimize_timed(random_tour.clone());
+
+    let iterations_max = 10;
+    let operator1 = Box::new(TwoOpt::new(cities.as_slice()));
+    let operator2 = Box::new(ThreeOpt::new(cities.as_slice()));
+    let adaptive_vns = AdaptiveVariableNeighborhoodSearch::new(
+        &random_tour,
+        vec![operator1, operator2],
+        IterationTerminator::new(iterations_max),
+        rng.clone(),
+    );
+    let adaptive_vns_outcome = adaptive_vns.optimize_timed(random_tour.clone());
 
     println!(
         "random tour length: {}, computation time: {}",
@@ -82,6 +94,11 @@ fn main() {
         "vns tour length: {}, computation time: {}",
         vns_outcome.solution().evaluate(),
         vns_outcome.duration().as_nanos() as f32 * 1e-9
+    );
+    println!(
+        "adaptive vns tour length: {}, computation time: {}",
+        adaptive_vns_outcome.solution().evaluate(),
+        adaptive_vns_outcome.duration().as_nanos() as f32 * 1e-9
     );
     println!(
         "sa tour length: {}, computation time: {}",

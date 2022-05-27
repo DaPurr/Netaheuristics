@@ -128,11 +128,11 @@ pub trait ImprovingHeuristic<Solution> {
         let mut best_solution = incumbent.clone();
         loop {
             let candidate = self.propose_candidate(incumbent.clone());
+            if candidate.evaluate() < best_solution.evaluate() {
+                best_solution = candidate.clone();
+            }
             if self.accept_candidate(&candidate, &incumbent) {
                 incumbent = candidate;
-                if incumbent.evaluate() < best_solution.evaluate() {
-                    best_solution = incumbent.clone();
-                }
             }
             if self.should_terminate(&incumbent) {
                 break;
@@ -262,3 +262,5 @@ impl OperatorSelector for SequentialSelector {
         *self.operator_index.borrow()
     }
 }
+
+// todo: make so many tests: for example adaptivity, ...

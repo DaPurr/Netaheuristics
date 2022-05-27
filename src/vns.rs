@@ -1,6 +1,9 @@
 //! Contains all types relevant to _variable neighborhood search_.
+use std::cell::RefCell;
+
 use crate::{
     termination::TerminationCriteria, Evaluate, ImprovingHeuristic, Operator, OperatorSelector,
+    ProposalEvaluation, SelectorAdaptive,
 };
 
 /// Implementation of _variable neighborhood search_ according to [here](https://en.wikipedia.org/wiki/Variable_neighborhood_search).
@@ -8,7 +11,13 @@ pub struct VariableNeighborhoodSearch<Solution, Selector: OperatorSelector> {
     operators: Vec<Box<dyn Operator<Solution = Solution>>>,
     selector: Selector,
     terminator: Box<dyn TerminationCriteria<Solution>>,
-    // rng: Box<dyn rand::RngCore>,
+}
+
+pub struct AdaptiveVariableNeighborhoodSearch<Solution> {
+    selector: RefCell<SelectorAdaptive<Box<dyn Operator<Solution = Solution>>>>,
+    terminator: Box<dyn TerminationCriteria<Solution>>,
+    best_objective: f32,
+    rng: RefCell<Box<dyn rand::RngCore>>,
 }
 
 /// Builder pattern to construct a _variable neighborhood search_ heuristic.
@@ -17,6 +26,60 @@ pub struct VNSBuilder<Solution, Selector> {
     selector: Option<Selector>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
+}
+
+impl<Solution> AdaptiveVariableNeighborhoodSearch<Solution> {
+    pub fn new<
+        Terminator: TerminationCriteria<Solution> + 'static,
+        Rng: rand::RngCore + 'static,
+    >(
+        initial: &dyn Evaluate,
+        operators: Vec<Box<dyn Operator<Solution = Solution>>>,
+        terminator: Terminator,
+        rng: Rng,
+    ) -> Self {
+        let selector = SelectorAdaptive::default_parameters(operators);
+        Self {
+            best_objective: initial.evaluate(),
+            selector: RefCell::new(selector),
+            terminator: Box::new(terminator),
+            rng: RefCell::new(Box::new(rng)),
+        }
+    }
+}
+
+impl<Solution> ImprovingHeuristic<Solution> for AdaptiveVariableNeighborhoodSearch<Solution> {
+    fn accept_candidate(&self, candidate: &Solution, incumbent: &Solution) -> bool
+    where
+        Solution: Evaluate,
+    {
+        accept_candidate_if_better(candidate, incumbent)
+    }
+
+    fn should_terminate(&self, incumbent: &Solution) -> bool {
+        self.terminator.terminate(incumbent)
+    }
+
+    fn propose_candidate(&self, incumbent: Solution) -> Solution
+    where
+        Solution: Evaluate,
+    {
+        let incumbent_objective = incumbent.evaluate();
+        let mut selector = self.selector.borrow_mut();
+        let operator = selector.select(self.rng.borrow_mut().as_mut());
+        let candidate = operator.find_best_neighbor(incumbent);
+        let candidate_objective = candidate.evaluate();
+
+        if candidate_objective < self.best_objective {
+            selector.feedback(ProposalEvaluation::ImprovedBest)
+        } else if candidate_objective < incumbent_objective {
+            selector.feedback(ProposalEvaluation::Accept)
+        } else {
+            selector.feedback(ProposalEvaluation::Reject)
+        }
+
+        candidate
+    }
 }
 
 impl<'a, Solution, Selector: OperatorSelector> VNSBuilder<Solution, Selector> {
@@ -79,7 +142,7 @@ where
     where
         Solution: Evaluate,
     {
-        return candidate.evaluate() < incumbent.evaluate();
+        accept_candidate_if_better(candidate, incumbent)
     }
 
     /// Select operator and get the best neighbor if ```solution```.
@@ -96,4 +159,8 @@ where
     fn should_terminate(&self, incumbent: &Solution) -> bool {
         self.terminator.terminate(incumbent)
     }
+}
+
+fn accept_candidate_if_better(candidate: &dyn Evaluate, incumbent: &dyn Evaluate) -> bool {
+    return candidate.evaluate() < incumbent.evaluate();
 }
