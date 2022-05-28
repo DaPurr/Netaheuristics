@@ -1,9 +1,13 @@
-use std::{collections::HashSet, hash::Hash, time::SystemTime};
+use std::{
+    collections::HashSet,
+    hash::Hash,
+    time::{Duration, SystemTime},
+};
 
 use heuristics::{
     lns::{Destroyer, LargeNeighborhoodSearch, Repairer},
     sa::SimulatedAnnealing,
-    termination::{IterationTerminator, Terminator},
+    termination::{Terminator, TimeTerminator},
     vns::{AdaptiveVariableNeighborhoodSearch, VariableNeighborhoodSearch},
     Evaluate, ImprovingHeuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
 };
@@ -14,6 +18,7 @@ fn main() {
     let n = 100;
     let width = 100.;
     let height = 100.;
+    let computation_time_max = Duration::new(2, 0);
 
     // create random cities
     let seed = 0;
@@ -31,32 +36,29 @@ fn main() {
     let duration_greedy = now.elapsed().unwrap();
 
     // optimize with VNS
-    let operator_2opt = TwoOpt::new(cities.as_slice());
-    let operator_3opt = ThreeOpt::new(cities.as_slice());
-
+    let operator1 = TwoOpt::new(cities.as_slice());
+    let operator2 = Insertion::new(cities.as_slice());
     let vns = VariableNeighborhoodSearch::builder()
         .selector(SequentialSelector::new(2))
-        .operator(operator_2opt)
-        .operator(operator_3opt)
-        .terminator(Terminator::builder().iterations(10).build())
+        .operator(operator1)
+        .operator(operator2)
+        .terminator(Terminator::builder().time_max(computation_time_max).build())
         .build();
     let vns_outcome = vns.optimize_timed(random_tour.clone());
 
     let seed = 0;
     let rng = rand::rngs::StdRng::seed_from_u64(seed);
     let temperature = 100.;
-    let n_iterations = 10_000;
     let sa = SimulatedAnnealing::builder()
         .selector(RandomSelector::new(rng.clone(), 1))
         .operator(TwoOptRandom)
         .temperature(temperature)
-        .terminator(Terminator::builder().iterations(n_iterations).build())
+        .terminator(Terminator::builder().time_max(computation_time_max).build())
         .rng(rng)
         .build();
     let sa_outcome = sa.optimize_timed(random_tour.clone());
 
     let seed = 0;
-    let iterations = 10_000;
     let rng = rand::rngs::StdRng::seed_from_u64(seed);
     let n_destroyed_cities = 2;
     let lns = LargeNeighborhoodSearch::builder()
@@ -64,18 +66,17 @@ fn main() {
         .selector_repairer(SequentialSelector::new(1))
         .destroyer(TSPDestroyer::new(n_destroyed_cities))
         .repairer(TSPRepairer::new(*cities.clone()))
-        .terminator(Terminator::builder().iterations(iterations).build())
+        .terminator(Terminator::builder().time_max(computation_time_max).build())
         .rng(rng.clone())
         .build();
     let lns_outcome = lns.optimize_timed(random_tour.clone());
 
-    let iterations_max = 10;
     let operator1 = Box::new(TwoOpt::new(cities.as_slice()));
-    let operator2 = Box::new(ThreeOpt::new(cities.as_slice()));
+    let operator2 = Box::new(Insertion::new(cities.as_slice()));
     let adaptive_vns = AdaptiveVariableNeighborhoodSearch::new(
         &random_tour,
         vec![operator1, operator2],
-        IterationTerminator::new(iterations_max),
+        TimeTerminator::new(computation_time_max),
         rng.clone(),
     );
     let adaptive_vns_outcome = adaptive_vns.optimize_timed(random_tour.clone());
@@ -134,20 +135,11 @@ struct TwoOpt {
 
 struct TwoOptRandom;
 
-struct ThreeOpt {
+struct Insertion {
     tour: Option<Tour>,
     cities: Box<Vec<City>>,
-    permutation: ThreeOptPermutation,
     index1: usize,
     index2: usize,
-    index3: usize,
-}
-
-enum ThreeOptPermutation {
-    One,
-    Two,
-    Three,
-    Four,
 }
 
 struct TSPDestroyer {
@@ -252,7 +244,11 @@ impl<'a> TwoOpt {
             panic!("unknown state");
         }
 
-        true
+        if self.index1 == self.index2 {
+            self.advance()
+        } else {
+            true
+        }
     }
 }
 
@@ -283,94 +279,61 @@ impl Operator for TwoOpt {
     }
 }
 
-impl ThreeOpt {
+impl Insertion {
     fn new(cities: &[City]) -> Self {
         Self {
             tour: None,
             cities: Box::new(cities.to_owned()),
-            permutation: ThreeOptPermutation::One,
             index1: 0,
-            index2: 0,
-            index3: 0,
+            index2: 1,
         }
     }
 
     // advance index3, index2, index1
     fn advance(&mut self) -> bool {
-        match self.permutation {
-            ThreeOptPermutation::One => {
-                self.permutation = ThreeOptPermutation::Two;
+        // init
+        let number_cities = self.cities.len();
 
-                true
-            }
-            ThreeOptPermutation::Two => {
-                self.permutation = ThreeOptPermutation::Three;
+        // index1 locked, index2 locked
+        if self.index1 == number_cities - 1 && self.index2 == number_cities - 1 {
+            return false;
+        }
+        // index1 unlocked, index2 locked
+        else if self.index1 < number_cities - 1 && self.index2 == number_cities - 1 {
+            self.index1 += 1;
+            self.index2 = 0;
+        }
+        // index 1 ?, index2 unlocked
+        else {
+            self.index2 += 1;
+        }
 
-                true
-            }
-            ThreeOptPermutation::Three => {
-                self.permutation = ThreeOptPermutation::Four;
-
-                true
-            }
-            ThreeOptPermutation::Four => {
-                self.permutation = ThreeOptPermutation::One;
-
-                let n = self.cities.len();
-                // index3 free
-                if self.index3 + 1 < n {
-                    self.index3 += 1;
-                }
-                // index3 blocked, index2 free
-                else if self.index2 + 1 < n {
-                    self.index2 += 1;
-                    self.index3 = 0;
-                }
-                // index3 blocked, index2 blocked, index1 free
-                else if self.index1 + 1 < n {
-                    self.index1 += 1;
-                    self.index2 = 0;
-                    self.index3 = 0;
-                }
-                // index1, index2, index3 blocked
-                else if self.index3 + 1 == n && self.index2 + 1 == n && self.index1 + 1 == n {
-                    return false;
-                } else {
-                    panic!("invalid state")
-                }
-
-                true
-            }
+        if self.index1 == self.index2 {
+            self.advance()
+        } else {
+            true
         }
     }
 }
 
-impl Iterator for ThreeOpt {
+impl Iterator for Insertion {
     type Item = Tour;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // no tour means no neighborhood
-        if let None = self.tour {
-            return None;
-        }
-
-        // advance by one
         if !self.advance() {
             return None;
         }
 
-        // return 3-opt permutation of tour
-        match (&self.tour, &self.permutation) {
-            (Some(tour), ThreeOptPermutation::One) => Some(tour.clone()),
-            (Some(tour), ThreeOptPermutation::Two) => Some(tour.swap(self.index1, self.index2)),
-            (Some(tour), ThreeOptPermutation::Three) => Some(tour.swap(self.index1, self.index3)),
-            (Some(tour), ThreeOptPermutation::Four) => Some(tour.swap(self.index2, self.index3)),
-            _ => panic!("invalid state"),
+        if let Some(tour) = &self.tour {
+            let tour = tour.reinsert(self.index1, self.index2);
+            return Some(tour);
+        } else {
+            None
         }
     }
 }
 
-impl Operator for ThreeOpt {
+impl Operator for Insertion {
     type Solution = Tour;
     fn construct_neighborhood(&self, solution: Tour) -> Box<dyn Iterator<Item = Tour>> {
         let mut neighborhood = Self::new(self.cities.as_ref());
@@ -423,6 +386,13 @@ impl Tour {
     fn swap(&self, index1: usize, index2: usize) -> Tour {
         let mut solution = self.clone();
         solution.cities.swap(index1, index2);
+        solution
+    }
+
+    fn reinsert(&self, from: usize, to: usize) -> Tour {
+        let mut solution = self.clone();
+        let city = solution.cities.remove(from);
+        solution.cities.insert(to, city);
         solution
     }
 }
@@ -501,3 +471,5 @@ fn distance(city1: &City, city2: &City) -> f32 {
 
     (delta_x.powf(2.) + delta_y.powf(2.)).sqrt()
 }
+
+// todo: fix 3-opt. seems to be the same as 2-opt, takes very long

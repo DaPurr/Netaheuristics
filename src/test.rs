@@ -1,8 +1,10 @@
+use assert_approx_eq::assert_approx_eq;
 use rand::{Rng, SeedableRng};
 
 use crate::{
     sa::SimulatedAnnealing, termination::Terminator, vns::VariableNeighborhoodSearch, Evaluate,
-    ImprovingHeuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
+    ImprovingHeuristic, Operator, ProposalEvaluation, RandomSelector, SelectorAdaptive,
+    SequentialSelector, StochasticOperator,
 };
 
 #[test]
@@ -109,6 +111,26 @@ fn sa_single_operator() {
 
     let sa_solution = sa.optimize(initial_solution);
     assert_eq!(sa_solution.index, 7);
+}
+
+#[test]
+fn adaptivity_core() {
+    let mut selector = SelectorAdaptive::default_parameters(vec![1, 2, 3]);
+    assert_approx_eq!(selector.weights[0], 1.);
+    assert_approx_eq!(selector.weights[1], 1.);
+    assert_approx_eq!(selector.weights[2], 1.);
+
+    selector.index_last_selection = Some(0);
+    selector.feedback(ProposalEvaluation::ImprovedBest);
+    assert_approx_eq!(selector.weights[0], 4.);
+    assert_approx_eq!(selector.weights[1], 1.);
+    assert_approx_eq!(selector.weights[2], 1.);
+
+    selector.index_last_selection = Some(2);
+    selector.feedback(ProposalEvaluation::Accept);
+    assert_approx_eq!(selector.weights[0], 4.);
+    assert_approx_eq!(selector.weights[1], 1.);
+    assert_approx_eq!(selector.weights[2], 2.);
 }
 
 #[derive(Clone, Debug)]

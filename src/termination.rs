@@ -2,7 +2,7 @@
 
 use std::{
     cell::RefCell,
-    ops::AddAssign,
+    ops::{Add, AddAssign},
     time::{Duration, SystemTime},
 };
 
@@ -55,6 +55,15 @@ impl IterationTerminator {
     }
 }
 
+impl TimeTerminator {
+    pub fn new(computation_time_max: Duration) -> Self {
+        let now = std::time::SystemTime::now();
+        Self {
+            time_end: now.add(computation_time_max),
+        }
+    }
+}
+
 impl Terminator {
     /// Construct a builder for termination criteria.
     pub fn builder<Solution>() -> TerminatorBuilder<Solution> {
@@ -97,8 +106,8 @@ impl<Solution> TerminatorBuilder<Solution> {
     }
 
     /// Add a time limit.
-    pub fn time_max(mut self, seconds: u64) -> Self {
-        let time_end = std::time::SystemTime::now() + Duration::from_secs(seconds);
+    pub fn time_max(mut self, computation_time_max: Duration) -> Self {
+        let time_end = std::time::SystemTime::now() + computation_time_max;
         self.terminators.push(Box::new(TimeTerminator { time_end }));
         self
     }
