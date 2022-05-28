@@ -161,6 +161,7 @@ pub trait ImprovingHeuristic<Solution> {
 pub struct SelectorAdaptive<T> {
     options: Vec<T>,
     weights: Vec<f32>,
+    decay: f32,
     index_last_selection: Option<usize>,
     weight_improve_best: f32,
     weight_accept: f32,
@@ -174,10 +175,11 @@ pub enum ProposalEvaluation {
 }
 
 impl<T> SelectorAdaptive<T> {
-    pub fn default_parameters(options: Vec<T>) -> Self {
+    pub fn default_parameters(options: Vec<T>, decay: f32) -> Self {
         let n = options.len();
         Self {
             options,
+            decay,
             weights: vec![1.; n],
             index_last_selection: None,
             weight_improve_best: 3.,
@@ -189,10 +191,10 @@ impl<T> SelectorAdaptive<T> {
         let denom: f32 = self.weights.iter().sum();
         let mut sum = 0.;
         let r = rng.gen::<f32>() * denom;
-
         for i in 0..self.options.len() {
             sum += self.weights[i];
             if r <= sum {
+                println!("{}", i);
                 self.index_last_selection = Some(i);
                 return &self.options[i];
             }
@@ -209,12 +211,16 @@ impl<T> SelectorAdaptive<T> {
                 ProposalEvaluation::Reject => self.weight_reject,
             };
 
-            self.weights[index] += weight;
+            self.weights[index] = (1. - self.decay) * self.weights[index] + self.decay * weight;
         }
     }
 }
 
 impl<T> Outcome<T> {
+    pub fn new(solution: T, duration: Duration) -> Self {
+        Self { solution, duration }
+    }
+
     /// Get the solution which is decorated.
     pub fn solution(&self) -> &T {
         &self.solution

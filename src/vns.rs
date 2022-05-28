@@ -35,10 +35,11 @@ impl<Solution> AdaptiveVariableNeighborhoodSearch<Solution> {
     >(
         initial: &dyn Evaluate,
         operators: Vec<Box<dyn Operator<Solution = Solution>>>,
+        decay: f32,
         terminator: Terminator,
         rng: Rng,
     ) -> Self {
-        let selector = SelectorAdaptive::default_parameters(operators);
+        let selector = SelectorAdaptive::default_parameters(operators, decay);
         Self {
             best_objective: initial.evaluate(),
             selector: RefCell::new(selector),
@@ -151,6 +152,7 @@ where
         Solution: Evaluate,
     {
         let operator_index = self.selector.select(&solution);
+        println!("{}", operator_index);
         let operator = &self.operators[operator_index];
         operator.find_best_neighbor(solution)
     }

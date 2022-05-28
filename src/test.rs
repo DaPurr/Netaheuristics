@@ -115,7 +115,7 @@ fn sa_single_operator() {
 
 #[test]
 fn adaptivity_core() {
-    let mut selector = SelectorAdaptive::default_parameters(vec![1, 2, 3]);
+    let mut selector = SelectorAdaptive::default_parameters(vec![1, 2, 3], 1.);
     assert_approx_eq!(selector.weights[0], 1.);
     assert_approx_eq!(selector.weights[1], 1.);
     assert_approx_eq!(selector.weights[2], 1.);

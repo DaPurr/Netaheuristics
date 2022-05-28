@@ -7,15 +7,16 @@ use std::{
 use heuristics::{
     lns::{Destroyer, LargeNeighborhoodSearch, Repairer},
     sa::SimulatedAnnealing,
-    termination::{Terminator, TimeTerminator},
+    termination::{IterationTerminator, Terminator, TimeTerminator},
     vns::{AdaptiveVariableNeighborhoodSearch, VariableNeighborhoodSearch},
-    Evaluate, ImprovingHeuristic, Operator, RandomSelector, SequentialSelector, StochasticOperator,
+    Evaluate, ImprovingHeuristic, Operator, Outcome, RandomSelector, SequentialSelector,
+    StochasticOperator,
 };
 use rand::{Rng, RngCore, SeedableRng};
 
 fn main() {
     // init
-    let n = 100;
+    let n = 10;
     let width = 100.;
     let height = 100.;
     let computation_time_max = Duration::new(2, 0);
@@ -31,9 +32,11 @@ fn main() {
     let now = SystemTime::now();
     let random_tour = construct_random_tour(&mut cities.clone().into_iter(), &mut rng);
     let duration_random = now.elapsed().unwrap();
+    let random_outcome = Outcome::new(random_tour, duration_random);
     let now = SystemTime::now();
     let greedy_tour = construct_greedy_tour(&mut cities.clone().into_iter(), &mut rng);
     let duration_greedy = now.elapsed().unwrap();
+    let greedy_outcome = Outcome::new(greedy_tour, duration_greedy);
 
     // optimize with VNS
     let operator1 = TwoOpt::new(cities.as_slice());
@@ -48,80 +51,61 @@ fn main() {
                 .build(),
         )
         .build();
-    let vns_outcome = vns.optimize_timed(random_tour.clone());
+    let vns_outcome = vns.optimize_timed(random_outcome.solution().clone());
 
-    // optimize with Simulated Annealing
-    let temperature = 100.;
-    let sa = SimulatedAnnealing::builder()
-        .selector(RandomSelector::new(1, rng.clone()))
-        .operator(TwoOptRandom)
-        .temperature(temperature)
-        .terminator(
-            Terminator::builder()
-                .computation_time(computation_time_max)
-                .build(),
-        )
-        .rng(rng.clone())
-        .build();
-    let sa_outcome = sa.optimize_timed(random_tour.clone());
+    // // optimize with Simulated Annealing
+    // let temperature = 100.;
+    // let sa = SimulatedAnnealing::builder()
+    //     .selector(RandomSelector::new(1, rng.clone()))
+    //     .operator(TwoOptRandom)
+    //     .temperature(temperature)
+    //     .terminator(
+    //         Terminator::builder()
+    //             .computation_time(computation_time_max)
+    //             .build(),
+    //     )
+    //     .rng(rng.clone())
+    //     .build();
+    // let sa_outcome = sa.optimize_timed(random_outcome.solution().clone());
 
-    // optimize with Large Neighborhood Search
-    let n_destroyed_cities = 2;
-    let lns = LargeNeighborhoodSearch::builder()
-        .selector_destroyer(SequentialSelector::new(1))
-        .selector_repairer(SequentialSelector::new(1))
-        .destroyer(TSPDestroyer::new(n_destroyed_cities))
-        .repairer(TSPRepairer::new(*cities.clone()))
-        .terminator(
-            Terminator::builder()
-                .computation_time(computation_time_max)
-                .build(),
-        )
-        .rng(rng.clone())
-        .build();
-    let lns_outcome = lns.optimize_timed(random_tour.clone());
+    // // optimize with Large Neighborhood Search
+    // let n_destroyed_cities = 2;
+    // let lns = LargeNeighborhoodSearch::builder()
+    //     .selector_destroyer(SequentialSelector::new(1))
+    //     .selector_repairer(SequentialSelector::new(1))
+    //     .destroyer(TSPDestroyer::new(n_destroyed_cities))
+    //     .repairer(TSPRepairer::new(*cities.clone()))
+    //     .terminator(
+    //         Terminator::builder()
+    //             .computation_time(computation_time_max)
+    //             .build(),
+    //     )
+    //     .rng(rng.clone())
+    //     .build();
+    // let lns_outcome = lns.optimize_timed(random_outcome.solution().clone());
 
     // optimize with adaptive VNS
+    println!("ADAPTIVE\n=========================");
+    let decay = 0.5;
     let operator1 = Box::new(TwoOpt::new(cities.as_slice()));
     let operator2 = Box::new(Insertion::new(cities.as_slice()));
     let adaptive_vns = AdaptiveVariableNeighborhoodSearch::new(
-        &random_tour,
+        random_outcome.solution(),
         vec![operator1, operator2],
+        decay,
+        // IterationTerminator::new(100),
         TimeTerminator::new(computation_time_max),
         rng.clone(),
     );
-    let adaptive_vns_outcome = adaptive_vns.optimize_timed(random_tour.clone());
+    let adaptive_vns_outcome = adaptive_vns.optimize_timed(random_outcome.solution().clone());
 
-    println!(
-        "random tour length: {}, computation time: {}",
-        random_tour.evaluate(),
-        duration_random.as_nanos() as f32 * 1e-9
-    );
-    println!(
-        "greedy tour length: {}, computation time: {}",
-        greedy_tour.evaluate(),
-        duration_greedy.as_nanos() as f32 * 1e-9
-    );
-    println!(
-        "vns tour length: {}, computation time: {}",
-        vns_outcome.solution().evaluate(),
-        vns_outcome.duration().as_nanos() as f32 * 1e-9
-    );
-    println!(
-        "adaptive vns tour length: {}, computation time: {}",
-        adaptive_vns_outcome.solution().evaluate(),
-        adaptive_vns_outcome.duration().as_nanos() as f32 * 1e-9
-    );
-    println!(
-        "sa tour length: {}, computation time: {}",
-        sa_outcome.solution().evaluate(),
-        sa_outcome.duration().as_nanos() as f32 * 1e-9
-    );
-    println!(
-        "lns tour length: {}, computation time: {}",
-        lns_outcome.solution().evaluate(),
-        lns_outcome.duration().as_nanos() as f32 * 1e-9
-    );
+    // display results
+    show_solution(random_outcome, "random");
+    show_solution(greedy_outcome, "greedy");
+    show_solution(vns_outcome, "vns");
+    show_solution(adaptive_vns_outcome, "adaptive vns");
+    // show_solution(sa_outcome, "sa");
+    // show_solution(lns_outcome, "lns");
 }
 
 #[derive(Clone, Debug)]
@@ -159,6 +143,15 @@ struct TSPDestroyer {
 
 struct TSPRepairer {
     cities: Vec<City>,
+}
+
+fn show_solution<Solution: Evaluate>(outcome: Outcome<Solution>, method: &str) {
+    println!(
+        "{} tour length: {}, computation time: {}",
+        method,
+        outcome.solution().evaluate(),
+        outcome.duration().as_nanos() as f32 * 1e-9
+    );
 }
 
 impl TSPRepairer {
