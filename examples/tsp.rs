@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     hash::Hash,
     time::{Duration, SystemTime},
 };
@@ -42,35 +42,46 @@ fn main() {
         .selector(SequentialSelector::new(2))
         .operator(operator1)
         .operator(operator2)
-        .terminator(Terminator::builder().time_max(computation_time_max).build())
+        .terminator(
+            Terminator::builder()
+                .computation_time(computation_time_max)
+                .build(),
+        )
         .build();
     let vns_outcome = vns.optimize_timed(random_tour.clone());
 
-    let seed = 0;
-    let rng = rand::rngs::StdRng::seed_from_u64(seed);
+    // optimize with Simulated Annealing
     let temperature = 100.;
     let sa = SimulatedAnnealing::builder()
-        .selector(RandomSelector::new(rng.clone(), 1))
+        .selector(RandomSelector::new(1, rng.clone()))
         .operator(TwoOptRandom)
         .temperature(temperature)
-        .terminator(Terminator::builder().time_max(computation_time_max).build())
-        .rng(rng)
+        .terminator(
+            Terminator::builder()
+                .computation_time(computation_time_max)
+                .build(),
+        )
+        .rng(rng.clone())
         .build();
     let sa_outcome = sa.optimize_timed(random_tour.clone());
 
-    let seed = 0;
-    let rng = rand::rngs::StdRng::seed_from_u64(seed);
+    // optimize with Large Neighborhood Search
     let n_destroyed_cities = 2;
     let lns = LargeNeighborhoodSearch::builder()
         .selector_destroyer(SequentialSelector::new(1))
         .selector_repairer(SequentialSelector::new(1))
         .destroyer(TSPDestroyer::new(n_destroyed_cities))
         .repairer(TSPRepairer::new(*cities.clone()))
-        .terminator(Terminator::builder().time_max(computation_time_max).build())
+        .terminator(
+            Terminator::builder()
+                .computation_time(computation_time_max)
+                .build(),
+        )
         .rng(rng.clone())
         .build();
     let lns_outcome = lns.optimize_timed(random_tour.clone());
 
+    // optimize with adaptive VNS
     let operator1 = Box::new(TwoOpt::new(cities.as_slice()));
     let operator2 = Box::new(Insertion::new(cities.as_slice()));
     let adaptive_vns = AdaptiveVariableNeighborhoodSearch::new(
@@ -165,9 +176,21 @@ impl TSPDestroyer {
 impl Repairer for TSPRepairer {
     type Solution = Tour;
     fn repair(&self, mut solution: Self::Solution, _rng: &mut dyn rand::RngCore) -> Self::Solution {
+        let map: HashMap<City, usize> = self
+            .cities
+            .iter()
+            .enumerate()
+            .map(|(index, city)| (city.clone(), index))
+            .collect();
         let cities: HashSet<City> = self.cities.iter().map(|x| x.to_owned()).collect();
         let cities_tour: HashSet<City> = solution.cities.clone().into_iter().collect();
-        let cities_missing = &cities - &cities_tour;
+        let cities_missing: HashSet<City> = &cities - &cities_tour;
+        let mut cities_missing: Vec<City> = cities_missing.into_iter().collect();
+        cities_missing.sort_by(|x, y| {
+            let index_x = map[x];
+            let index_y = map[y];
+            index_x.cmp(&index_y)
+        });
 
         for city in cities_missing {
             let index_to_place = closest_city_to(&city, &solution.cities);

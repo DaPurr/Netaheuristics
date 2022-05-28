@@ -106,7 +106,7 @@ impl<Solution> TerminatorBuilder<Solution> {
     }
 
     /// Add a time limit.
-    pub fn time_max(mut self, computation_time_max: Duration) -> Self {
+    pub fn computation_time(mut self, computation_time_max: Duration) -> Self {
         let time_end = std::time::SystemTime::now() + computation_time_max;
         self.terminators.push(Box::new(TimeTerminator { time_end }));
         self

@@ -98,7 +98,7 @@ fn sa_single_operator() {
 
     let sa = SimulatedAnnealing::builder()
         .operator(NeighborSwap::new(&numbers))
-        .selector(RandomSelector::new(rng.clone(), 1))
+        .selector(RandomSelector::new(1, rng.clone()))
         .terminator(Terminator::builder().iterations(n_iterations_max).build())
         .rng(rng)
         .temperature(temperature)

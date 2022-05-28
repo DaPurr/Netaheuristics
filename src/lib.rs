@@ -16,7 +16,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use rand::Rng;
+use rand::{Rng, RngCore};
 
 pub mod lns;
 pub mod sa;
@@ -65,8 +65,11 @@ pub trait StochasticOperator {
 }
 
 /// Give the next operator based on certain rules.
+#[allow(unused_variables)]
 pub trait OperatorSelector {
-    fn select(&self, solution: &dyn Evaluate) -> usize;
+    fn select(&self, solution: &dyn Evaluate) -> usize {
+        todo!()
+    }
 }
 
 /// Select operators in a consecutive manner.
@@ -80,8 +83,8 @@ pub struct SequentialSelector {
 
 /// Select the next operator uniformly at random.
 pub struct RandomSelector {
-    rng: RefCell<Box<dyn rand::RngCore>>,
     n_operators: usize,
+    rng: RefCell<Box<dyn RngCore>>,
 }
 
 /// Solution decorated with some metadata.
@@ -224,10 +227,10 @@ impl<T> Outcome<T> {
 }
 
 impl RandomSelector {
-    pub fn new<T: rand::RngCore + 'static>(rng: T, n_operators: usize) -> Self {
+    pub fn new<T: rand::RngCore + 'static>(n_operators: usize, rng: T) -> Self {
         Self {
-            rng: RefCell::new(Box::new(rng)),
             n_operators,
+            rng: RefCell::new(Box::new(rng)),
         }
     }
 }
