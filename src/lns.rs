@@ -1,14 +1,14 @@
 //! Contains all types relevant to _large neighborhood search_
 use std::cell::RefCell;
 
-use crate::{termination::TerminationCriteria, Evaluate, ImprovingHeuristic, OperatorSelector};
+use crate::{
+    termination::TerminationCriteria, Evaluate, ImprovingHeuristic, Operator, OperatorSelector,
+};
 
 /// Large Neighborhood Search implementation.
 pub struct LargeNeighborhoodSearch<Solution> {
-    destroyers: Vec<Box<dyn Destroyer<Solution = Solution>>>,
-    repairers: Vec<Box<dyn Repairer<Solution = Solution>>>,
-    selector_destroyer: Box<dyn OperatorSelector>,
-    selector_repairer: Box<dyn OperatorSelector>,
+    selector_destroyer: Box<dyn OperatorSelector<Solution>>,
+    selector_repairer: Box<dyn OperatorSelector<Solution>>,
     terminator: Box<dyn TerminationCriteria<Solution>>,
     rng: RefCell<Box<dyn rand::RngCore>>,
 }
@@ -27,11 +27,11 @@ pub trait Repairer {
 
 /// Builder design pattern for [LargeNeighborhoodSearch].
 pub struct LNSBuilder<Solution> {
-    destroyers: Vec<Box<dyn Destroyer<Solution = Solution>>>,
-    repairers: Vec<Box<dyn Repairer<Solution = Solution>>>,
+    destroyers: Vec<Box<dyn Operator<Solution = Solution>>>,
+    repairers: Vec<Box<dyn Operator<Solution = Solution>>>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
-    selector_destroyer: Option<Box<dyn OperatorSelector>>,
-    selector_repairer: Option<Box<dyn OperatorSelector>>,
+    selector_destroyer: Option<Box<dyn OperatorSelector<Solution>>>,
+    selector_repairer: Option<Box<dyn OperatorSelector<Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
 }
 
@@ -51,8 +51,6 @@ impl<Solution> LargeNeighborhoodSearch<Solution> {
 impl<Solution> LNSBuilder<Solution> {
     pub fn build(self) -> LargeNeighborhoodSearch<Solution> {
         LargeNeighborhoodSearch {
-            destroyers: self.destroyers,
-            repairers: self.repairers,
             selector_destroyer: self
                 .selector_destroyer
                 .expect("No destroyer selector specified"),
@@ -69,22 +67,28 @@ impl<Solution> LNSBuilder<Solution> {
         self
     }
 
-    pub fn destroyer<T: Destroyer<Solution = Solution> + 'static>(mut self, destroyer: T) -> Self {
+    pub fn destroyer<T: Operator<Solution = Solution> + 'static>(mut self, destroyer: T) -> Self {
         self.destroyers.push(Box::new(destroyer));
         self
     }
 
-    pub fn repairer<T: Repairer<Solution = Solution> + 'static>(mut self, repairer: T) -> Self {
+    pub fn repairer<T: Operator<Solution = Solution> + 'static>(mut self, repairer: T) -> Self {
         self.repairers.push(Box::new(repairer));
         self
     }
 
-    pub fn selector_destroyer<T: OperatorSelector + 'static>(mut self, selector: T) -> Self {
+    pub fn selector_destroyer<T: OperatorSelector<Solution> + 'static>(
+        mut self,
+        selector: T,
+    ) -> Self {
         self.selector_destroyer = Some(Box::new(selector));
         self
     }
 
-    pub fn selector_repairer<T: OperatorSelector + 'static>(mut self, repairer: T) -> Self {
+    pub fn selector_repairer<T: OperatorSelector<Solution> + 'static>(
+        mut self,
+        repairer: T,
+    ) -> Self {
         self.selector_repairer = Some(Box::new(repairer));
         self
     }
@@ -113,13 +117,11 @@ impl<Solution> ImprovingHeuristic<Solution> for LargeNeighborhoodSearch<Solution
     where
         Solution: Evaluate,
     {
-        let destroyer_index = self.selector_destroyer.select(&incumbent);
-        let repairer_index = self.selector_repairer.select(&incumbent);
-        let destroyer = self.destroyers[destroyer_index].as_ref();
-        let repairer = self.repairers[repairer_index].as_ref();
+        let destroyer = self.selector_destroyer.select(&incumbent);
+        let repairer = self.selector_repairer.select(&incumbent);
 
-        let destroyed = destroyer.destroy(incumbent, self.rng.borrow_mut().as_mut());
-        let repaired = repairer.repair(destroyed, self.rng.borrow_mut().as_mut());
+        let destroyed = destroyer.shake(incumbent, self.rng.borrow_mut().as_mut());
+        let repaired = repairer.shake(destroyed, self.rng.borrow_mut().as_mut());
 
         repaired
     }

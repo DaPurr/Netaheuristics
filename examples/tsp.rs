@@ -5,12 +5,12 @@ use std::{
 };
 
 use heuristics::{
-    lns::{Destroyer, LargeNeighborhoodSearch, Repairer},
+    lns::LargeNeighborhoodSearch,
     sa::SimulatedAnnealing,
     termination::{IterationTerminator, Terminator, TimeTerminator},
-    vns::{AdaptiveVariableNeighborhoodSearch, VariableNeighborhoodSearch},
-    Evaluate, ImprovingHeuristic, Operator, Outcome, RandomSelector, SequentialSelector,
-    StochasticOperator,
+    vns::VariableNeighborhoodSearch,
+    Evaluate, ImprovingHeuristic, Operator, Outcome, RandomSelector, SelectorAdaptive,
+    SequentialSelector, StochasticOperator,
 };
 use rand::{Rng, RngCore, SeedableRng};
 
@@ -39,64 +39,61 @@ fn main() {
     let greedy_outcome = Outcome::new(greedy_tour, duration_greedy);
 
     // optimize with VNS
-    let operator1 = TwoOpt::new(cities.as_slice());
-    let operator2 = Insertion::new(cities.as_slice());
+    let operator1: Box<dyn Operator<Solution = Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
+    let operator2: Box<dyn Operator<Solution = Tour>> = Box::new(Insertion::new(cities.as_slice()));
+    let operators = vec![operator1, operator2];
     let vns = VariableNeighborhoodSearch::builder()
-        .selector(SequentialSelector::new(2))
-        .operator(operator1)
-        .operator(operator2)
+        .selector(SequentialSelector::new(operators))
+        .terminator(TimeTerminator::new(computation_time_max))
+        .build();
+    let vns_outcome = vns.optimize_timed(random_outcome.solution().clone());
+
+    // optimize with Simulated Annealing
+    let temperature = 100.;
+    let operator: Box<dyn Operator<Solution = Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
+    let operators = vec![operator];
+    let sa = SimulatedAnnealing::builder()
+        .selector(RandomSelector::new(operators, rng.clone()))
+        .operator(TwoOptRandom)
+        .temperature(temperature)
         .terminator(
             Terminator::builder()
                 .computation_time(computation_time_max)
                 .build(),
         )
+        .rng(rng.clone())
         .build();
-    let vns_outcome = vns.optimize_timed(random_outcome.solution().clone());
+    let sa_outcome = sa.optimize_timed(random_outcome.solution().clone());
 
-    // // optimize with Simulated Annealing
-    // let temperature = 100.;
-    // let sa = SimulatedAnnealing::builder()
-    //     .selector(RandomSelector::new(1, rng.clone()))
-    //     .operator(TwoOptRandom)
-    //     .temperature(temperature)
-    //     .terminator(
-    //         Terminator::builder()
-    //             .computation_time(computation_time_max)
-    //             .build(),
-    //     )
-    //     .rng(rng.clone())
-    //     .build();
-    // let sa_outcome = sa.optimize_timed(random_outcome.solution().clone());
-
-    // // optimize with Large Neighborhood Search
-    // let n_destroyed_cities = 2;
-    // let lns = LargeNeighborhoodSearch::builder()
-    //     .selector_destroyer(SequentialSelector::new(1))
-    //     .selector_repairer(SequentialSelector::new(1))
-    //     .destroyer(TSPDestroyer::new(n_destroyed_cities))
-    //     .repairer(TSPRepairer::new(*cities.clone()))
-    //     .terminator(
-    //         Terminator::builder()
-    //             .computation_time(computation_time_max)
-    //             .build(),
-    //     )
-    //     .rng(rng.clone())
-    //     .build();
-    // let lns_outcome = lns.optimize_timed(random_outcome.solution().clone());
+    // optimize with Large Neighborhood Search
+    let n_destroyed_cities = 2;
+    let destroyers: Vec<Box<dyn Operator<Solution = Tour>>> =
+        vec![Box::new(TSPDestroyer::new(n_destroyed_cities))];
+    let repairers: Vec<Box<dyn Operator<Solution = Tour>>> =
+        vec![Box::new(TSPRepairer::new(*cities.clone()))];
+    let lns = LargeNeighborhoodSearch::builder()
+        .selector_destroyer(SequentialSelector::new(destroyers))
+        .selector_repairer(SequentialSelector::new(repairers))
+        .destroyer(TSPDestroyer::new(n_destroyed_cities))
+        .repairer(TSPRepairer::new(*cities.clone()))
+        .terminator(
+            Terminator::builder()
+                .computation_time(computation_time_max)
+                .build(),
+        )
+        .rng(rng.clone())
+        .build();
+    let lns_outcome = lns.optimize_timed(random_outcome.solution().clone());
 
     // optimize with adaptive VNS
-    println!("ADAPTIVE\n=========================");
     let decay = 0.5;
-    let operator1 = Box::new(TwoOpt::new(cities.as_slice()));
-    let operator2 = Box::new(Insertion::new(cities.as_slice()));
-    let adaptive_vns = AdaptiveVariableNeighborhoodSearch::new(
-        random_outcome.solution(),
-        vec![operator1, operator2],
-        decay,
-        // IterationTerminator::new(100),
-        TimeTerminator::new(computation_time_max),
-        rng.clone(),
-    );
+    let operator1: Box<dyn Operator<Solution = Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
+    let operator2: Box<dyn Operator<Solution = Tour>> = Box::new(Insertion::new(cities.as_slice()));
+    let operators = vec![operator1, operator2];
+    let adaptive_vns = VariableNeighborhoodSearch::builder()
+        .selector(SelectorAdaptive::default_weights(operators, decay, rng))
+        .terminator(TimeTerminator::new(computation_time_max))
+        .build();
     let adaptive_vns_outcome = adaptive_vns.optimize_timed(random_outcome.solution().clone());
 
     // display results
@@ -104,8 +101,8 @@ fn main() {
     show_solution(greedy_outcome, "greedy");
     show_solution(vns_outcome, "vns");
     show_solution(adaptive_vns_outcome, "adaptive vns");
-    // show_solution(sa_outcome, "sa");
-    // show_solution(lns_outcome, "lns");
+    show_solution(sa_outcome, "sa");
+    show_solution(lns_outcome, "lns");
 }
 
 #[derive(Clone, Debug)]
@@ -166,9 +163,9 @@ impl TSPDestroyer {
     }
 }
 
-impl Repairer for TSPRepairer {
+impl Operator for TSPRepairer {
     type Solution = Tour;
-    fn repair(&self, mut solution: Self::Solution, _rng: &mut dyn rand::RngCore) -> Self::Solution {
+    fn shake(&self, mut solution: Self::Solution, _rng: &mut dyn rand::RngCore) -> Self::Solution {
         let map: HashMap<City, usize> = self
             .cities
             .iter()
@@ -207,9 +204,9 @@ fn closest_city_to<'a>(city: &'a City, city_pool: &'a Vec<City>) -> usize {
     city_closest_index
 }
 
-impl Destroyer for TSPDestroyer {
+impl Operator for TSPDestroyer {
     type Solution = Tour;
-    fn destroy(&self, mut solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution {
+    fn shake(&self, mut solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution {
         for _ in 0..self.n {
             let r = rng.gen_range(0..solution.cities.len());
             solution.cities.remove(r);
@@ -292,6 +289,16 @@ impl Operator for TwoOpt {
         let mut neighborhood = Self::new(self.cities.as_ref());
         neighborhood.tour = Some(solution.clone());
         Box::new(neighborhood)
+    }
+
+    fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution {
+        let n = solution.cities.len();
+        let index1 = rng.gen_range(0..n);
+        let index2 = rng.gen_range(0..n);
+
+        let mut neighbor = solution.clone();
+        neighbor.cities.swap(index1, index2);
+        neighbor
     }
 }
 

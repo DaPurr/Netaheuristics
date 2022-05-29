@@ -2,20 +2,24 @@ use assert_approx_eq::assert_approx_eq;
 use rand::{Rng, SeedableRng};
 
 use crate::{
-    sa::SimulatedAnnealing, termination::Terminator, vns::VariableNeighborhoodSearch, Evaluate,
-    ImprovingHeuristic, Operator, ProposalEvaluation, RandomSelector, SelectorAdaptive,
-    SequentialSelector, StochasticOperator,
+    sa::SimulatedAnnealing,
+    termination::{IterationTerminator, Terminator},
+    vns::VariableNeighborhoodSearch,
+    Evaluate, ImprovingHeuristic, Operator, ProposalEvaluation, RandomSelector, SelectorAdaptive,
+    SequentialSelector,
 };
 
 #[test]
 fn vns_single_operator1() {
     let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
-    let n_iterations_max = 10;
+    let iterations_max = 10;
 
+    let operator: Box<dyn Operator<Solution = Number>> =
+        Box::new(NeighborsUpUntilN::new(&numbers, 1));
+    let operators = vec![operator];
     let vns = VariableNeighborhoodSearch::builder()
-        .operator(NeighborsUpUntilN::new(&numbers, 1))
-        .selector(SequentialSelector::new(1))
-        .terminator(Terminator::builder().iterations(n_iterations_max).build())
+        .selector(SequentialSelector::new(operators))
+        .terminator(IterationTerminator::new(iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -30,12 +34,14 @@ fn vns_single_operator1() {
 #[test]
 fn vns_single_operator2() {
     let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
-    let n_iterations_max = 10;
+    let iterations_max = 10;
 
+    let operator: Box<dyn Operator<Solution = Number>> =
+        Box::new(NeighborsUpUntilN::new(&numbers, 3));
+    let operators = vec![operator];
     let vns = VariableNeighborhoodSearch::builder()
-        .selector(SequentialSelector::new(1))
-        .operator(NeighborsUpUntilN::new(&numbers, 3))
-        .terminator(Terminator::builder().iterations(n_iterations_max).build())
+        .selector(SequentialSelector::new(operators))
+        .terminator(IterationTerminator::new(iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -50,13 +56,16 @@ fn vns_single_operator2() {
 #[test]
 fn vns_multiple_operators1() {
     let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
-    let n_iterations_max = 10;
+    let iterations_max = 10;
 
+    let operator1: Box<dyn Operator<Solution = Number>> =
+        Box::new(NeighborsUpUntilN::new(&numbers, 1));
+    let operator2: Box<dyn Operator<Solution = Number>> =
+        Box::new(NeighborsUpUntilN::new(&numbers, 3));
+    let operators = vec![operator1, operator2];
     let vns = VariableNeighborhoodSearch::builder()
-        .operator(NeighborsUpUntilN::new(&numbers, 1))
-        .operator(NeighborsUpUntilN::new(&numbers, 3))
-        .selector(SequentialSelector::new(2))
-        .terminator(Terminator::builder().iterations(n_iterations_max).build())
+        .selector(SequentialSelector::new(operators))
+        .terminator(IterationTerminator::new(iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -71,13 +80,16 @@ fn vns_multiple_operators1() {
 #[test]
 fn vns_multiple_operators2() {
     let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
-    let n_iterations_max = 10;
+    let iterations_max = 10;
 
+    let operator1: Box<dyn Operator<Solution = Number>> =
+        Box::new(NeighborsUpUntilN::new(&numbers, 1));
+    let operator2: Box<dyn Operator<Solution = Number>> =
+        Box::new(NeighborsUpUntilN::new(&numbers, 4));
+    let operators = vec![operator1, operator2];
     let vns = VariableNeighborhoodSearch::builder()
-        .operator(NeighborsUpUntilN::new(&numbers, 1))
-        .operator(NeighborsUpUntilN::new(&numbers, 4))
-        .selector(SequentialSelector::new(2))
-        .terminator(Terminator::builder().iterations(n_iterations_max).build())
+        .selector(SequentialSelector::new(operators))
+        .terminator(IterationTerminator::new(iterations_max))
         .build();
 
     let initial_solution = Number {
@@ -94,12 +106,12 @@ fn sa_single_operator() {
     let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
     let rng = rand::rngs::StdRng::seed_from_u64(0);
     let temperature = 100.;
-    let n_iterations_max = 100;
+    let iterations_max = 100;
 
+    let operator: Box<dyn Operator<Solution = Number>> = Box::new(NeighborSwap::new(&numbers));
     let sa = SimulatedAnnealing::builder()
-        .operator(NeighborSwap::new(&numbers))
-        .selector(RandomSelector::new(1, rng.clone()))
-        .terminator(Terminator::builder().iterations(n_iterations_max).build())
+        .selector(RandomSelector::new(vec![operator], rng.clone()))
+        .terminator(Terminator::builder().iterations(iterations_max).build())
         .rng(rng)
         .temperature(temperature)
         .build();
@@ -115,18 +127,19 @@ fn sa_single_operator() {
 
 #[test]
 fn adaptivity_core() {
-    let mut selector = SelectorAdaptive::default_parameters(vec![1, 2, 3], 1.);
+    let rng = rand::rngs::StdRng::seed_from_u64(0);
+    let mut selector = SelectorAdaptive::default_weights(vec![1, 2, 3], 1., rng);
     assert_approx_eq!(selector.weights[0], 1.);
     assert_approx_eq!(selector.weights[1], 1.);
     assert_approx_eq!(selector.weights[2], 1.);
 
-    selector.index_last_selection = Some(0);
+    selector.index_last_selection.replace(Some(0));
     selector.feedback(ProposalEvaluation::ImprovedBest);
     assert_approx_eq!(selector.weights[0], 4.);
     assert_approx_eq!(selector.weights[1], 1.);
     assert_approx_eq!(selector.weights[2], 1.);
 
-    selector.index_last_selection = Some(2);
+    selector.index_last_selection.replace(Some(2));
     selector.feedback(ProposalEvaluation::Accept);
     assert_approx_eq!(selector.weights[0], 4.);
     assert_approx_eq!(selector.weights[1], 1.);
@@ -162,7 +175,7 @@ impl NeighborSwap {
     }
 }
 
-impl StochasticOperator for NeighborSwap {
+impl Operator for NeighborSwap {
     type Solution = Number;
     fn shake(&self, solution: Number, rng: &mut dyn rand::RngCore) -> Self::Solution {
         let index = solution.index;

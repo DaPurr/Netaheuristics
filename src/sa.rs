@@ -11,7 +11,7 @@ use rand::Rng;
 /// Simulated Annealing implementation.
 pub struct SimulatedAnnealing<Solution> {
     operators: Vec<Box<dyn StochasticOperator<Solution = Solution>>>,
-    selector: Box<dyn OperatorSelector>,
+    selector: Box<dyn OperatorSelector<Solution>>,
     terminator: Box<dyn TerminationCriteria<Solution>>,
     rng: RefCell<Box<dyn rand::RngCore>>,
     temperature: f32,
@@ -19,7 +19,7 @@ pub struct SimulatedAnnealing<Solution> {
 
 /// Builder design pattern for [SimulatedAnnealing].
 pub struct SABuilder<Solution> {
-    selector: Option<Box<dyn OperatorSelector>>,
+    selector: Option<Box<dyn OperatorSelector<Solution>>>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
     operators: Vec<Box<dyn StochasticOperator<Solution = Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
@@ -64,7 +64,7 @@ impl<Solution> SABuilder<Solution> {
         self
     }
 
-    pub fn selector<T: OperatorSelector + 'static>(mut self, selector: T) -> Self {
+    pub fn selector<T: OperatorSelector<Solution> + 'static>(mut self, selector: T) -> Self {
         self.selector = Some(Box::new(selector));
         self
     }
@@ -105,8 +105,7 @@ impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
     where
         Solution: Evaluate,
     {
-        let operator_index = self.selector.select(&incumbent);
-        let operator = self.operators[operator_index].as_ref();
+        let operator = self.selector.select(&incumbent);
         operator.shake(incumbent, self.rng.borrow_mut().as_mut())
     }
 
