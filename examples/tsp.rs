@@ -5,12 +5,12 @@ use std::{
 };
 
 use heuristics::{
-    lns::LargeNeighborhoodSearch,
-    sa::SimulatedAnnealing,
-    termination::{IterationTerminator, Terminator, TimeTerminator},
-    vns::VariableNeighborhoodSearch,
-    Evaluate, ImprovingHeuristic, Operator, Outcome, RandomSelector, SelectorAdaptive,
-    SequentialSelector, StochasticOperator,
+    algorithms::{
+        lns::LargeNeighborhoodSearch, sa::SimulatedAnnealing, vns::VariableNeighborhoodSearch,
+    },
+    selectors::{AdaptiveSelector, RandomSelector, SequentialSelector},
+    termination::{Terminator, TimeTerminator},
+    Evaluate, ImprovingHeuristic, Operator, Outcome,
 };
 use rand::{Rng, RngCore, SeedableRng};
 
@@ -39,21 +39,23 @@ fn main() {
     let greedy_outcome = Outcome::new(greedy_tour, duration_greedy);
 
     // optimize with VNS
-    let operator1: Box<dyn Operator<Solution = Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
-    let operator2: Box<dyn Operator<Solution = Tour>> = Box::new(Insertion::new(cities.as_slice()));
-    let operators = vec![operator1, operator2];
+    let operator1 = TwoOpt::new(cities.as_slice());
+    let operator2 = Insertion::new(cities.as_slice());
     let vns = VariableNeighborhoodSearch::builder()
-        .selector(SequentialSelector::new(operators))
+        .selector(
+            SequentialSelector::new()
+                .option(operator1)
+                .option(operator2),
+        )
         .terminator(TimeTerminator::new(computation_time_max))
         .build();
     let vns_outcome = vns.optimize_timed(random_outcome.solution().clone());
 
     // optimize with Simulated Annealing
     let temperature = 100.;
-    let operator: Box<dyn Operator<Solution = Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
-    let operators = vec![operator];
+    let operator = TwoOpt::new(cities.as_slice());
     let sa = SimulatedAnnealing::builder()
-        .selector(RandomSelector::new(operators, rng.clone()))
+        .selector(RandomSelector::new(rng.clone()).option(operator))
         .operator(TwoOptRandom)
         .temperature(temperature)
         .terminator(
@@ -67,15 +69,11 @@ fn main() {
 
     // optimize with Large Neighborhood Search
     let n_destroyed_cities = 2;
-    let destroyers: Vec<Box<dyn Operator<Solution = Tour>>> =
-        vec![Box::new(TSPDestroyer::new(n_destroyed_cities))];
-    let repairers: Vec<Box<dyn Operator<Solution = Tour>>> =
-        vec![Box::new(TSPRepairer::new(*cities.clone()))];
+    let destroyer = TSPDestroyer::new(n_destroyed_cities);
+    let repairer = TSPRepairer::new(*cities.clone());
     let lns = LargeNeighborhoodSearch::builder()
-        .selector_destroyer(SequentialSelector::new(destroyers))
-        .selector_repairer(SequentialSelector::new(repairers))
-        .destroyer(TSPDestroyer::new(n_destroyed_cities))
-        .repairer(TSPRepairer::new(*cities.clone()))
+        .selector_destroyer(SequentialSelector::new().option(destroyer))
+        .selector_repairer(SequentialSelector::new().option(repairer))
         .terminator(
             Terminator::builder()
                 .computation_time(computation_time_max)
@@ -87,11 +85,14 @@ fn main() {
 
     // optimize with adaptive VNS
     let decay = 0.5;
-    let operator1: Box<dyn Operator<Solution = Tour>> = Box::new(TwoOpt::new(cities.as_slice()));
-    let operator2: Box<dyn Operator<Solution = Tour>> = Box::new(Insertion::new(cities.as_slice()));
-    let operators = vec![operator1, operator2];
+    let operator1 = TwoOpt::new(cities.as_slice());
+    let operator2 = Insertion::new(cities.as_slice());
     let adaptive_vns = VariableNeighborhoodSearch::builder()
-        .selector(SelectorAdaptive::default_weights(operators, decay, rng))
+        .selector(
+            AdaptiveSelector::default_weights(decay, rng)
+                .option(operator1)
+                .option(operator2),
+        )
         .terminator(TimeTerminator::new(computation_time_max))
         .build();
     let adaptive_vns_outcome = adaptive_vns.optimize_timed(random_outcome.solution().clone());
@@ -215,7 +216,7 @@ impl Operator for TSPDestroyer {
     }
 }
 
-impl StochasticOperator for TwoOptRandom {
+impl Operator for TwoOptRandom {
     type Solution = Tour;
     fn shake(&self, solution: Tour, rng: &mut dyn rand::RngCore) -> Self::Solution {
         let n = solution.cities.len();

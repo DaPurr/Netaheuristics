@@ -1,16 +1,14 @@
-//! Contains all types relevant to _simulated annealing_.
+//! _simulated annealing_.
 use std::cell::RefCell;
 
 use crate::{
-    termination::TerminationCriteria, Evaluate, ImprovingHeuristic, OperatorSelector,
-    StochasticOperator,
+    termination::TerminationCriteria, Evaluate, ImprovingHeuristic, Operator, OperatorSelector,
 };
 
 use rand::Rng;
 
 /// Simulated Annealing implementation.
 pub struct SimulatedAnnealing<Solution> {
-    operators: Vec<Box<dyn StochasticOperator<Solution = Solution>>>,
     selector: Box<dyn OperatorSelector<Solution>>,
     terminator: Box<dyn TerminationCriteria<Solution>>,
     rng: RefCell<Box<dyn rand::RngCore>>,
@@ -21,7 +19,7 @@ pub struct SimulatedAnnealing<Solution> {
 pub struct SABuilder<Solution> {
     selector: Option<Box<dyn OperatorSelector<Solution>>>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
-    operators: Vec<Box<dyn StochasticOperator<Solution = Solution>>>,
+    operators: Vec<Box<dyn Operator<Solution = Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
     temperature: Option<f32>,
 }
@@ -41,7 +39,6 @@ impl<Solution> SimulatedAnnealing<Solution> {
 impl<Solution> SABuilder<Solution> {
     pub fn build(self) -> SimulatedAnnealing<Solution> {
         SimulatedAnnealing {
-            operators: self.operators,
             rng: RefCell::new(self.rng.expect("No RNG source specified")),
             selector: self
                 .selector
@@ -56,10 +53,7 @@ impl<Solution> SABuilder<Solution> {
         self
     }
 
-    pub fn operator<T: StochasticOperator<Solution = Solution> + 'static>(
-        mut self,
-        operator: T,
-    ) -> Self {
+    pub fn operator<T: Operator<Solution = Solution> + 'static>(mut self, operator: T) -> Self {
         self.operators.push(Box::new(operator));
         self
     }
@@ -125,5 +119,38 @@ fn compute_probability(
         (-delta / temperature).exp()
     } else {
         1.
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::SeedableRng;
+
+    use crate::{
+        algorithms::sa::SimulatedAnnealing,
+        selectors::RandomSelector,
+        termination::Terminator,
+        test::{NeighborSwap, Number},
+        ImprovingHeuristic,
+    };
+
+    #[test]
+    fn sa_single_operator() {
+        let numbers = vec![9., 8., 7., 8., 9., 7., 5., 0.];
+        let rng = rand::rngs::StdRng::seed_from_u64(0);
+        let temperature = 100.;
+        let iterations_max = 100;
+
+        let operator = NeighborSwap::new(&numbers);
+        let sa = SimulatedAnnealing::builder()
+            .selector(RandomSelector::new(rng.clone()).option(operator))
+            .terminator(Terminator::builder().iterations(iterations_max).build())
+            .rng(rng)
+            .temperature(temperature)
+            .build();
+
+        let initial_solution = Number::new(0, numbers[0]);
+        let sa_solution = sa.optimize(initial_solution);
+        assert_eq!(sa_solution.index(), 7);
     }
 }

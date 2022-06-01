@@ -10,20 +10,13 @@
 //! - Large Neighborhood Search
 //!
 //! and their adaptive variants.
-use std::{
-    cell::RefCell,
-    ops::SubAssign,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
-use rand::{Rng, RngCore};
-
-pub mod lns;
-pub mod sa;
+pub mod algorithms;
+pub mod selectors;
 pub mod termination;
 #[cfg(test)]
 mod test;
-pub mod vns;
 
 /// Evaluate the quality of a solution.
 pub trait Evaluate {
@@ -63,15 +56,6 @@ pub trait Operator {
     }
 }
 
-/// A stochastic local search operator.
-///
-/// An operator of this type does not return a neighborhood, but instead a single randomly drawn neighbor.
-pub trait StochasticOperator {
-    type Solution;
-    /// Return a random neighbor of ```solution```, with respect to the neighborhood induced by this operator, using ```rng``` as source of randomness.
-    fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
-}
-
 /// Give the next operator based on certain rules.
 #[allow(unused_variables)]
 pub trait OperatorSelector<Solution> {
@@ -80,22 +64,7 @@ pub trait OperatorSelector<Solution> {
     fn feedback(&self, status: ProposalEvaluation) {}
 }
 
-/// Select operators in a consecutive manner.
-///
-/// Iterate through all operators, consecutively, starting from the first one. When an improvement is made, the iteration is restarted from the beginning.
-pub struct SequentialSelector<Solution> {
-    operators: Vec<Box<dyn Operator<Solution = Solution>>>,
-    operator_index: RefCell<usize>,
-    objective_best: RefCell<f32>,
-}
-
-/// Select the next operator uniformly at random.
-pub struct RandomSelector<Solution> {
-    operators: Vec<Box<dyn Operator<Solution = Solution>>>,
-    rng: RefCell<Box<dyn RngCore>>,
-}
-
-/// Solution decorated with some metadata.
+/// Solution decorated with some metadata
 ///
 /// Currently, only the computation time is added to the solution.
 pub struct Outcome<T> {
@@ -177,74 +146,14 @@ pub trait ImprovingHeuristic<Solution> {
     }
 }
 
-pub struct SelectorAdaptive<T> {
-    rng: RefCell<Box<dyn rand::RngCore>>,
-    options: Vec<T>,
-    weights: Vec<f32>,
-    decay: f32,
-    index_last_selection: RefCell<Option<usize>>,
-    weight_improve_best: f32,
-    weight_accept: f32,
-    weight_reject: f32,
-}
-
+/// Evaluation of a proposed candidate
 pub enum ProposalEvaluation {
+    /// Candidate improved the incumbent
     ImprovedBest,
+    /// Candidate was accepted
     Accept,
+    /// Candidate was rejected
     Reject,
-}
-
-impl<T> SelectorAdaptive<T> {
-    pub fn default_weights<Rng: rand::RngCore + 'static>(
-        options: Vec<T>,
-        decay: f32,
-        rng: Rng,
-    ) -> Self {
-        let n = options.len();
-        Self {
-            rng: RefCell::new(Box::new(rng)),
-            options,
-            decay,
-            weights: vec![1.; n],
-            index_last_selection: RefCell::new(None),
-            weight_improve_best: 3.,
-            weight_accept: 1.,
-            weight_reject: 0.,
-        }
-    }
-
-    pub fn feedback(&mut self, status: ProposalEvaluation) {
-        if let Some(index) = self.index_last_selection.borrow().as_ref() {
-            let index = *index;
-            let weight = match status {
-                ProposalEvaluation::ImprovedBest => self.weight_improve_best,
-                ProposalEvaluation::Accept => self.weight_accept,
-                ProposalEvaluation::Reject => self.weight_reject,
-            };
-
-            self.weights[index] = (1. - self.decay) * self.weights[index] + self.decay * weight;
-        }
-    }
-}
-
-impl<Solution> OperatorSelector<Solution>
-    for SelectorAdaptive<Box<dyn Operator<Solution = Solution>>>
-{
-    fn select(&self, _solution: &dyn Evaluate) -> &dyn Operator<Solution = Solution> {
-        let ref rng = self.rng;
-        let denom: f32 = self.weights.iter().sum();
-        let mut sum = 0.;
-        let r = rng.borrow_mut().gen::<f32>() * denom;
-        for i in 0..self.options.len() {
-            sum += self.weights[i];
-            if r <= sum {
-                self.index_last_selection.replace(Some(i));
-                return self.options[i].as_ref();
-            }
-        }
-
-        panic!("something went wrong");
-    }
 }
 
 impl<T> Outcome<T> {
@@ -260,51 +169,6 @@ impl<T> Outcome<T> {
     /// Return the computation time that was needed to get this solution.
     pub fn duration(&self) -> Duration {
         self.duration
-    }
-}
-
-impl<Solution> RandomSelector<Solution> {
-    pub fn new<T: rand::RngCore + 'static>(
-        operators: Vec<Box<dyn Operator<Solution = Solution>>>,
-        rng: T,
-    ) -> Self {
-        Self {
-            operators,
-            rng: RefCell::new(Box::new(rng)),
-        }
-    }
-}
-
-impl<Solution> OperatorSelector<Solution> for RandomSelector<Solution> {
-    fn select(&self, _solution: &dyn Evaluate) -> &dyn Operator<Solution = Solution> {
-        let index = self.rng.borrow_mut().gen_range(0..self.operators.len());
-        self.operators[index].as_ref()
-    }
-}
-
-impl<Solution> SequentialSelector<Solution> {
-    pub fn new(operators: Vec<Box<dyn Operator<Solution = Solution>>>) -> Self {
-        Self {
-            operators,
-            objective_best: RefCell::new(std::f32::INFINITY),
-            operator_index: RefCell::new(0),
-        }
-    }
-}
-
-impl<Solution> OperatorSelector<Solution> for SequentialSelector<Solution> {
-    fn select(&self, solution: &dyn Evaluate) -> &dyn Operator<Solution = Solution> {
-        let objective = solution.evaluate();
-        let k = *self.operator_index.borrow();
-        if objective < *self.objective_best.borrow() {
-            self.objective_best.replace(objective);
-            self.operator_index.borrow_mut().sub_assign(k);
-        } else {
-            self.operator_index.replace((k + 1) % self.operators.len());
-        }
-
-        let index = *self.operator_index.borrow();
-        self.operators[index].as_ref()
     }
 }
 

@@ -1,9 +1,7 @@
-//! Contains all types relevant to _large neighborhood search_
+//! _large neighborhood search_
 use std::cell::RefCell;
 
-use crate::{
-    termination::TerminationCriteria, Evaluate, ImprovingHeuristic, Operator, OperatorSelector,
-};
+use crate::{termination::TerminationCriteria, Evaluate, ImprovingHeuristic, OperatorSelector};
 
 /// Large Neighborhood Search implementation.
 pub struct LargeNeighborhoodSearch<Solution> {
@@ -13,22 +11,8 @@ pub struct LargeNeighborhoodSearch<Solution> {
     rng: RefCell<Box<dyn rand::RngCore>>,
 }
 
-/// Trait to model a destroy function.
-pub trait Destroyer {
-    type Solution;
-    fn destroy(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
-}
-
-/// Trait to model a repair function.
-pub trait Repairer {
-    type Solution;
-    fn repair(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution;
-}
-
 /// Builder design pattern for [LargeNeighborhoodSearch].
 pub struct LNSBuilder<Solution> {
-    destroyers: Vec<Box<dyn Operator<Solution = Solution>>>,
-    repairers: Vec<Box<dyn Operator<Solution = Solution>>>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
     selector_destroyer: Option<Box<dyn OperatorSelector<Solution>>>,
     selector_repairer: Option<Box<dyn OperatorSelector<Solution>>>,
@@ -38,8 +22,6 @@ pub struct LNSBuilder<Solution> {
 impl<Solution> LargeNeighborhoodSearch<Solution> {
     pub fn builder() -> LNSBuilder<Solution> {
         LNSBuilder {
-            destroyers: vec![],
-            repairers: vec![],
             terminator: None,
             selector_destroyer: None,
             selector_repairer: None,
@@ -64,16 +46,6 @@ impl<Solution> LNSBuilder<Solution> {
 
     pub fn terminator(mut self, terminator: Box<dyn TerminationCriteria<Solution>>) -> Self {
         self.terminator = Some(terminator);
-        self
-    }
-
-    pub fn destroyer<T: Operator<Solution = Solution> + 'static>(mut self, destroyer: T) -> Self {
-        self.destroyers.push(Box::new(destroyer));
-        self
-    }
-
-    pub fn repairer<T: Operator<Solution = Solution> + 'static>(mut self, repairer: T) -> Self {
-        self.repairers.push(Box::new(repairer));
         self
     }
 

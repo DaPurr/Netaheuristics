@@ -1,4 +1,4 @@
-//! All types required to model termination criteria.
+//! All types required to model termination criteria
 
 use std::{
     cell::RefCell,
