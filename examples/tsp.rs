@@ -4,7 +4,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use heuristics::{
+use netaheuristics::{
     algorithms::{
         lns::LargeNeighborhoodSearch, sa::SimulatedAnnealing, vns::VariableNeighborhoodSearch,
     },
