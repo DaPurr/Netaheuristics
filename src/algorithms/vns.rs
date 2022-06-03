@@ -1,5 +1,7 @@
 //! _variable neighborhood search_
-use crate::{termination::TerminationCriteria, Evaluate, ImprovingHeuristic, OperatorSelector};
+use crate::{
+    selectors::OperatorSelector, termination::TerminationCriteria, Evaluate, ImprovingHeuristic,
+};
 
 /// Implementation of _variable neighborhood search_ according to [here](https://en.wikipedia.org/wiki/Variable_neighborhood_search).
 pub struct VariableNeighborhoodSearch<Solution, Selector: OperatorSelector<Solution>> {

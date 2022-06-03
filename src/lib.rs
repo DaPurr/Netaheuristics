@@ -56,14 +56,6 @@ pub trait Operator {
     }
 }
 
-/// Give the next operator based on certain rules.
-#[allow(unused_variables)]
-pub trait OperatorSelector<Solution> {
-    fn select(&self, solution: &dyn Evaluate) -> &dyn Operator<Solution = Solution>;
-
-    fn feedback(&self, status: ProposalEvaluation) {}
-}
-
 /// Solution decorated with some metadata
 ///
 /// Currently, only the computation time is added to the solution.
@@ -132,7 +124,7 @@ pub trait ImprovingHeuristic<Solution> {
     #[allow(unused_variables)]
     fn callback_candidate_rejected(&self, candidate: &Solution, incumbent: &Solution) {}
 
-    /// Runs the [optimize] function and returns an [Outcome], decorated with computation time.
+    /// Runs the [ImprovingHeuristic::optimize] function and returns an [Outcome], decorated with computation time.
     fn optimize_timed(self, solution: Solution) -> Outcome<Solution>
     where
         Solution: Clone + Evaluate,

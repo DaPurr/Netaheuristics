@@ -1,7 +1,9 @@
 //! _large neighborhood search_
 use std::cell::RefCell;
 
-use crate::{termination::TerminationCriteria, Evaluate, ImprovingHeuristic, OperatorSelector};
+use crate::{
+    selectors::OperatorSelector, termination::TerminationCriteria, Evaluate, ImprovingHeuristic,
+};
 
 /// Large Neighborhood Search implementation.
 pub struct LargeNeighborhoodSearch<Solution> {

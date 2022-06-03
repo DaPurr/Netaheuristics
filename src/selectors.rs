@@ -3,7 +3,17 @@ use std::{cell::RefCell, ops::SubAssign};
 
 use rand::Rng;
 
-use crate::{Evaluate, Operator, OperatorSelector, ProposalEvaluation};
+use crate::{Evaluate, Operator, ProposalEvaluation};
+
+/// Give the next operator based on certain rules.
+#[allow(unused_variables)]
+pub trait OperatorSelector<Solution> {
+    /// Select the next operator based on the rules specified by the implementing type
+    fn select(&self, solution: &dyn Evaluate) -> &dyn Operator<Solution = Solution>;
+
+    /// Give feedback on the last selected operator
+    fn feedback(&self, status: ProposalEvaluation) {}
+}
 
 /// Select operators in a consecutive manner
 ///
@@ -36,6 +46,10 @@ pub struct AdaptiveSelector<Solution> {
 }
 
 impl<Solution> AdaptiveSelector<Solution> {
+    /// Create an [AdaptiveSelector] with default weights. They are:
+    /// - Best solution improved: 3
+    /// - Accepted candidate: 1
+    /// - Rejected cadidate: 0
     pub fn default_weights<Rng: rand::RngCore + 'static>(decay: f32, rng: Rng) -> Self {
         Self {
             rng: RefCell::new(Box::new(rng)),
@@ -49,6 +63,27 @@ impl<Solution> AdaptiveSelector<Solution> {
         }
     }
 
+    /// Create an [AdaptiveSelector] with custom weights
+    pub fn custom_weights<Rng: rand::RngCore + 'static>(
+        decay: f32,
+        weight_improve_best: f32,
+        weight_accept: f32,
+        weight_reject: f32,
+        rng: Rng,
+    ) -> Self {
+        Self {
+            rng: RefCell::new(Box::new(rng)),
+            decay,
+            options: vec![],
+            weights: vec![],
+            index_last_selection: RefCell::new(None),
+            weight_improve_best,
+            weight_accept,
+            weight_reject,
+        }
+    }
+
+    /// Give feedback on the last chosen operator based on the last proposed candidate.
     pub fn feedback(&mut self, status: ProposalEvaluation) {
         if let Some(index) = self.index_last_selection.borrow().as_ref() {
             let index = *index;
@@ -61,7 +96,8 @@ impl<Solution> AdaptiveSelector<Solution> {
         }
     }
 
-    pub fn option<T: Operator<Solution = Solution> + 'static>(mut self, option: T) -> Self {
+    /// Add operator to the operator pool
+    pub fn operator<T: Operator<Solution = Solution> + 'static>(mut self, option: T) -> Self {
         self.options.push(Box::new(option));
         self.weights.push(1.);
         self
@@ -82,7 +118,7 @@ impl<Solution> OperatorSelector<Solution> for AdaptiveSelector<Solution> {
             }
         }
 
-        panic!("something went wrong");
+        panic!("Could not select operator");
     }
 }
 
@@ -153,9 +189,9 @@ mod tests {
         let op2 = NeighborSwap::new(&[1., 2., 3.]);
         let op3 = NeighborSwap::new(&[1., 2., 3.]);
         let mut selector = AdaptiveSelector::default_weights(1., rng)
-            .option(op1)
-            .option(op2)
-            .option(op3);
+            .operator(op1)
+            .operator(op2)
+            .operator(op3);
         assert_approx_eq!(selector.weights[0], 1.);
         assert_approx_eq!(selector.weights[1], 1.);
         assert_approx_eq!(selector.weights[2], 1.);

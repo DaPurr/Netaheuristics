@@ -90,8 +90,8 @@ fn main() {
     let adaptive_vns = VariableNeighborhoodSearch::builder()
         .selector(
             AdaptiveSelector::default_weights(decay, rng)
-                .option(operator1)
-                .option(operator2),
+                .operator(operator1)
+                .operator(operator2),
         )
         .terminator(TimeTerminator::new(computation_time_max))
         .build();

@@ -2,7 +2,8 @@
 use std::cell::RefCell;
 
 use crate::{
-    termination::TerminationCriteria, Evaluate, ImprovingHeuristic, Operator, OperatorSelector,
+    selectors::OperatorSelector, termination::TerminationCriteria, Evaluate, ImprovingHeuristic,
+    Operator,
 };
 
 use rand::Rng;
