@@ -14,6 +14,7 @@ pub struct SimulatedAnnealing<Solution> {
     terminator: Box<dyn TerminationCriteria<Solution>>,
     rng: RefCell<Box<dyn rand::RngCore>>,
     cooling_schedule: Box<dyn CoolingSchedule>,
+    minimum_acceptance_probability: f32,
 }
 
 /// Builder design pattern for [SimulatedAnnealing].
@@ -23,6 +24,7 @@ pub struct SABuilder<Solution> {
     operators: Vec<Box<dyn Operator<Solution = Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
     cooling_schedule: Option<Box<dyn CoolingSchedule>>,
+    minimum_acceptance_probability: Option<f32>,
 }
 
 /// Cool the system according to a schedule
@@ -66,6 +68,7 @@ impl<Solution> SimulatedAnnealing<Solution> {
             terminator: None,
             rng: None,
             cooling_schedule: None,
+            minimum_acceptance_probability: None,
         }
     }
 }
@@ -82,6 +85,9 @@ impl<Solution> SABuilder<Solution> {
             cooling_schedule: self
                 .cooling_schedule
                 .expect("No cooling schedule specified"),
+            minimum_acceptance_probability: self
+                .minimum_acceptance_probability
+                .expect("No minimum acceptance probability specified"),
         }
     }
 
@@ -114,6 +120,11 @@ impl<Solution> SABuilder<Solution> {
         self.cooling_schedule = Some(Box::new(cooling_schedule));
         self
     }
+
+    pub fn minimum_acceptance_probability(mut self, probability: f32) -> Self {
+        self.minimum_acceptance_probability = Some(probability);
+        self
+    }
 }
 
 impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
@@ -126,10 +137,11 @@ impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
     {
         let temperature = self.cooling_schedule.temperature();
         let r: f32 = self.rng.borrow_mut().gen();
+        let acceptance_probability =
+            compute_probability(temperature, incumbent.evaluate(), candidate.evaluate());
         if candidate.evaluate() < incumbent.evaluate() {
             true
-        } else if r <= compute_probability(temperature, incumbent.evaluate(), candidate.evaluate())
-        {
+        } else if r <= acceptance_probability.max(self.minimum_acceptance_probability) {
             true
         } else {
             false

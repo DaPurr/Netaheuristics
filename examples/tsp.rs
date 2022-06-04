@@ -18,7 +18,7 @@ use rand::{Rng, RngCore, SeedableRng};
 
 fn main() {
     // init
-    let n = 10;
+    let n = 100;
     let width = 100.;
     let height = 100.;
     let computation_time_max = Duration::new(2, 0);
@@ -56,6 +56,7 @@ fn main() {
     // optimize with Simulated Annealing
     let temperature = 100.;
     let cooling_factor = 0.05;
+    let minimum_acceptance_probability = 0.05;
     let schedule = FactorSchedule::new(temperature, cooling_factor);
     let operator = TwoOpt::new(cities.as_slice());
     let sa = SimulatedAnnealing::builder()
@@ -67,6 +68,7 @@ fn main() {
                 .computation_time(computation_time_max)
                 .build(),
         )
+        .minimum_acceptance_probability(minimum_acceptance_probability)
         .rng(rng.clone())
         .build();
     let sa_outcome = sa.optimize_timed(random_outcome.solution().clone());
