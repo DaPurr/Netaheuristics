@@ -1,5 +1,5 @@
 //! _simulated annealing_.
-use std::cell::RefCell;
+use std::{cell::RefCell, ops::MulAssign};
 
 use crate::{
     selectors::OperatorSelector, termination::TerminationCriteria, Evaluate, ImprovingHeuristic,
@@ -13,7 +13,7 @@ pub struct SimulatedAnnealing<Solution> {
     selector: Box<dyn OperatorSelector<Solution>>,
     terminator: Box<dyn TerminationCriteria<Solution>>,
     rng: RefCell<Box<dyn rand::RngCore>>,
-    temperature: f32,
+    cooling_schedule: Box<dyn CoolingSchedule>,
 }
 
 /// Builder design pattern for [SimulatedAnnealing].
@@ -22,7 +22,40 @@ pub struct SABuilder<Solution> {
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
     operators: Vec<Box<dyn Operator<Solution = Solution>>>,
     rng: Option<Box<dyn rand::RngCore>>,
-    temperature: Option<f32>,
+    cooling_schedule: Option<Box<dyn CoolingSchedule>>,
+}
+
+/// Cool the system according to a schedule
+pub trait CoolingSchedule {
+    fn cool(&self);
+    fn temperature(&self) -> f32;
+}
+
+/// Cool, every iteration, using a constant factor
+pub struct FactorSchedule {
+    temperature: RefCell<f32>,
+    cooling_factor: f32,
+}
+
+impl FactorSchedule {
+    pub fn new(initial_temperature: f32, decay: f32) -> Self {
+        Self {
+            temperature: RefCell::new(initial_temperature),
+            cooling_factor: decay,
+        }
+    }
+}
+
+impl CoolingSchedule for FactorSchedule {
+    fn cool(&self) {
+        self.temperature
+            .borrow_mut()
+            .mul_assign(1. - self.cooling_factor)
+    }
+
+    fn temperature(&self) -> f32 {
+        *self.temperature.borrow()
+    }
 }
 
 impl<Solution> SimulatedAnnealing<Solution> {
@@ -31,13 +64,14 @@ impl<Solution> SimulatedAnnealing<Solution> {
             operators: vec![],
             selector: None,
             terminator: None,
-            temperature: None,
             rng: None,
+            cooling_schedule: None,
         }
     }
 }
 
 impl<Solution> SABuilder<Solution> {
+    /// Build the configured Simulated Annealing heuristic
     pub fn build(self) -> SimulatedAnnealing<Solution> {
         SimulatedAnnealing {
             rng: RefCell::new(self.rng.expect("No RNG source specified")),
@@ -45,32 +79,39 @@ impl<Solution> SABuilder<Solution> {
                 .selector
                 .expect("No operator selection strategy specified"),
             terminator: self.terminator.expect("No termination criteria specified"),
-            temperature: self.temperature.expect("No initial temperature specified"),
+            cooling_schedule: self
+                .cooling_schedule
+                .expect("No cooling schedule specified"),
         }
     }
 
+    /// Set termination criteria
     pub fn terminator(mut self, criterium: Box<dyn TerminationCriteria<Solution>>) -> Self {
         self.terminator = Some(criterium);
         self
     }
 
+    /// Add an operator
     pub fn operator<T: Operator<Solution = Solution> + 'static>(mut self, operator: T) -> Self {
         self.operators.push(Box::new(operator));
         self
     }
 
+    /// Set operator selector
     pub fn selector<T: OperatorSelector<Solution> + 'static>(mut self, selector: T) -> Self {
         self.selector = Some(Box::new(selector));
         self
     }
 
+    /// Set source of randomness
     pub fn rng<T: rand::RngCore + 'static>(mut self, rng: T) -> Self {
         self.rng = Some(Box::new(rng));
         self
     }
 
-    pub fn temperature(mut self, temperature: f32) -> Self {
-        self.temperature = Some(temperature);
+    /// Set initial temperature
+    pub fn cooling_schedule<T: CoolingSchedule + 'static>(mut self, cooling_schedule: T) -> Self {
+        self.cooling_schedule = Some(Box::new(cooling_schedule));
         self
     }
 }
@@ -83,11 +124,11 @@ impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
     where
         Solution: Evaluate,
     {
+        let temperature = self.cooling_schedule.temperature();
         let r: f32 = self.rng.borrow_mut().gen();
         if candidate.evaluate() < incumbent.evaluate() {
             true
-        } else if r
-            <= compute_probability(self.temperature, incumbent.evaluate(), candidate.evaluate())
+        } else if r <= compute_probability(temperature, incumbent.evaluate(), candidate.evaluate())
         {
             true
         } else {
@@ -101,7 +142,9 @@ impl<Solution> ImprovingHeuristic<Solution> for SimulatedAnnealing<Solution> {
         Solution: Evaluate,
     {
         let operator = self.selector.select(&incumbent);
-        operator.shake(incumbent, self.rng.borrow_mut().as_mut())
+        let candidate = operator.shake(incumbent, self.rng.borrow_mut().as_mut());
+        self.cooling_schedule.cool();
+        candidate
     }
 
     /// Test whether the termination criteria are fulfilled.
@@ -128,7 +171,7 @@ mod tests {
     use rand::SeedableRng;
 
     use crate::{
-        algorithms::sa::SimulatedAnnealing,
+        algorithms::sa::{FactorSchedule, SimulatedAnnealing},
         selectors::RandomSelector,
         termination::Terminator,
         test::{NeighborSwap, Number},
@@ -141,13 +184,14 @@ mod tests {
         let rng = rand::rngs::StdRng::seed_from_u64(0);
         let temperature = 100.;
         let iterations_max = 100;
+        let schedule = FactorSchedule::new(temperature, 0.05);
 
         let operator = NeighborSwap::new(&numbers);
         let sa = SimulatedAnnealing::builder()
             .selector(RandomSelector::new(rng.clone()).option(operator))
             .terminator(Terminator::builder().iterations(iterations_max).build())
             .rng(rng)
-            .temperature(temperature)
+            .cooling_schedule(schedule)
             .build();
 
         let initial_solution = Number::new(0, numbers[0]);

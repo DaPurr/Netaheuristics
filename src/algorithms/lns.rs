@@ -33,6 +33,7 @@ impl<Solution> LargeNeighborhoodSearch<Solution> {
 }
 
 impl<Solution> LNSBuilder<Solution> {
+    /// Build the configured Large Neighborhood Search heuristic
     pub fn build(self) -> LargeNeighborhoodSearch<Solution> {
         LargeNeighborhoodSearch {
             selector_destroyer: self
@@ -46,11 +47,13 @@ impl<Solution> LNSBuilder<Solution> {
         }
     }
 
+    /// Set termination criteria
     pub fn terminator(mut self, terminator: Box<dyn TerminationCriteria<Solution>>) -> Self {
         self.terminator = Some(terminator);
         self
     }
 
+    /// Set operator selector for the destroyers
     pub fn selector_destroyer<T: OperatorSelector<Solution> + 'static>(
         mut self,
         selector: T,
@@ -59,6 +62,7 @@ impl<Solution> LNSBuilder<Solution> {
         self
     }
 
+    /// Set operator selector for the repairers
     pub fn selector_repairer<T: OperatorSelector<Solution> + 'static>(
         mut self,
         repairer: T,
@@ -67,6 +71,7 @@ impl<Solution> LNSBuilder<Solution> {
         self
     }
 
+    /// Set source of randomness
     pub fn rng<T: rand::RngCore + 'static>(mut self, rng: T) -> Self {
         self.rng = Some(Box::new(rng));
         self

@@ -6,7 +6,9 @@ use std::{
 
 use netaheuristics::{
     algorithms::{
-        lns::LargeNeighborhoodSearch, sa::SimulatedAnnealing, vns::VariableNeighborhoodSearch,
+        lns::LargeNeighborhoodSearch,
+        sa::{FactorSchedule, SimulatedAnnealing},
+        vns::VariableNeighborhoodSearch,
     },
     selectors::{AdaptiveSelector, RandomSelector, SequentialSelector},
     termination::{Terminator, TimeTerminator},
@@ -53,11 +55,13 @@ fn main() {
 
     // optimize with Simulated Annealing
     let temperature = 100.;
+    let cooling_factor = 0.05;
+    let schedule = FactorSchedule::new(temperature, cooling_factor);
     let operator = TwoOpt::new(cities.as_slice());
     let sa = SimulatedAnnealing::builder()
         .selector(RandomSelector::new(rng.clone()).option(operator))
         .operator(TwoOptRandom)
-        .temperature(temperature)
+        .cooling_schedule(schedule)
         .terminator(
             Terminator::builder()
                 .computation_time(computation_time_max)
@@ -495,5 +499,3 @@ fn distance(city1: &City, city2: &City) -> f32 {
 
     (delta_x.powf(2.) + delta_y.powf(2.)).sqrt()
 }
-
-// todo: fix 3-opt. seems to be the same as 2-opt, takes very long

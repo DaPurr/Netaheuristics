@@ -39,28 +39,35 @@ pub trait Operator {
 
     /// Return the optimal neighbor of ```solution```.
     fn find_best_neighbor(&self, solution: Self::Solution) -> Self::Solution {
-        let mut winner: Option<Self::Solution> = None;
-        for neighbor in self.construct_neighborhood(solution) {
-            if let Some(x) = &winner {
-                if neighbor.evaluate() < x.evaluate() {
-                    winner = Some(neighbor);
-                }
-            } else {
-                winner = Some(neighbor);
+        // init
+        let mut winner;
+        let mut iterator = self.construct_neighborhood(solution);
+        if let Some(x) = iterator.next() {
+            winner = x
+        } else {
+            panic!("neighborhood was empty")
+        }
+
+        // iterate neighborhood
+        for neighbor in iterator {
+            // if neighbor is better than the best
+            if neighbor.evaluate() < winner.evaluate() {
+                // update the best
+                winner = neighbor;
             }
         }
-        winner.expect("neighborhood was empty")
+
+        winner
     }
 
     #[allow(unused_variables)]
+    /// return a random neighbor of ```solution```
     fn shake(&self, solution: Self::Solution, rng: &mut dyn rand::RngCore) -> Self::Solution {
         todo!()
     }
 }
 
 /// Solution decorated with some metadata
-///
-/// Currently, only the computation time is added to the solution.
 pub struct Outcome<T> {
     solution: T,
     duration: std::time::Duration,
@@ -98,20 +105,29 @@ pub trait ImprovingHeuristic<Solution> {
         Solution: Clone + Evaluate,
         Self: Sized,
     {
+        // init
         let mut incumbent = initial;
         let mut best_solution = incumbent.clone();
+
+        // do until termination
         loop {
             let candidate = self.propose_candidate(incumbent.clone());
+
+            // if candidate is new best, update
             if candidate.evaluate() < best_solution.evaluate() {
                 self.callback_candidate_improved_best(&candidate, &incumbent);
                 best_solution = candidate.clone();
             }
+
+            // accept candidate as incumbent, or not ...
             if self.accept_candidate(&candidate, &incumbent) {
                 self.callback_candidate_accepted(&candidate, &incumbent);
                 incumbent = candidate;
             } else {
                 self.callback_candidate_rejected(&candidate, &incumbent);
             }
+
+            // test for termination
             if self.should_terminate(&incumbent) {
                 break;
             }
@@ -126,7 +142,7 @@ pub trait ImprovingHeuristic<Solution> {
     #[allow(unused_variables)]
     fn callback_candidate_rejected(&self, candidate: &Solution, incumbent: &Solution) {}
 
-    /// Runs the [ImprovingHeuristic::optimize] function and returns an [Outcome], decorated with computation time.
+    /// Runs the [ImprovingHeuristic::optimize] method and returns an [Outcome]
     fn optimize_timed(self, solution: Solution) -> Outcome<Solution>
     where
         Solution: Clone + Evaluate,
@@ -166,5 +182,4 @@ impl<T> Outcome<T> {
     }
 }
 
-// todo: clean up code / refactor
-// todo: implement adaptivity for SA
+// todo: add SA cooling schedule

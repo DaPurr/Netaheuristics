@@ -1,9 +1,11 @@
 [package]
 name = "netaheuristics"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+keywords = ["optimization", "heuristic"]
+description = "Framework to create metaheuristics"
+repository = "https://github.com/DaPurr/Netaheuristics"
 
 [dependencies]
 rand = "0"

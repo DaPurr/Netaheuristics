@@ -3,13 +3,13 @@ use crate::{
     selectors::OperatorSelector, termination::TerminationCriteria, Evaluate, ImprovingHeuristic,
 };
 
-/// Implementation of _variable neighborhood search_ according to [here](https://en.wikipedia.org/wiki/Variable_neighborhood_search).
+/// Implementation of _variable neighborhood search_ according to [here](https://en.wikipedia.org/wiki/Variable_neighborhood_search)
 pub struct VariableNeighborhoodSearch<Solution, Selector: OperatorSelector<Solution>> {
     selector: Selector,
     terminator: Box<dyn TerminationCriteria<Solution>>,
 }
 
-/// Builder pattern to construct a _variable neighborhood search_ heuristic.
+/// Builder pattern to construct a _variable neighborhood search_ heuristic
 pub struct VNSBuilder<Solution, Selector> {
     selector: Option<Selector>,
     terminator: Option<Box<dyn TerminationCriteria<Solution>>>,
@@ -17,19 +17,19 @@ pub struct VNSBuilder<Solution, Selector> {
 }
 
 impl<'a, Solution, Selector: OperatorSelector<Solution>> VNSBuilder<Solution, Selector> {
-    /// Specify the operator selector to be used.
+    /// Set operator selector
     pub fn selector(mut self, selector: Selector) -> Self {
         self.selector = Some(selector);
         self
     }
 
-    /// Specify the termination criteria.
+    /// Set termination criteria
     pub fn terminator<T: TerminationCriteria<Solution> + 'static>(mut self, terminator: T) -> Self {
         self.terminator = Some(Box::new(terminator));
         self
     }
 
-    /// Specify the source of randomness.
+    /// Set source of randomness
     pub fn rng<T: rand::RngCore + 'static>(mut self, rng: T) -> Self {
         self.rng = Some(Box::new(rng));
         self
@@ -69,7 +69,7 @@ where
     where
         Solution: Evaluate,
     {
-        accept_candidate_if_better(candidate, incumbent)
+        candidate.evaluate() < incumbent.evaluate()
     }
 
     /// Test whether the termination criteria are fulfilled.
@@ -85,10 +85,6 @@ where
         let operator = self.selector.select(&solution);
         operator.find_best_neighbor(solution)
     }
-}
-
-fn accept_candidate_if_better(candidate: &dyn Evaluate, incumbent: &dyn Evaluate) -> bool {
-    return candidate.evaluate() < incumbent.evaluate();
 }
 
 #[cfg(test)]
